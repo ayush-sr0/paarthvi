@@ -1,0 +1,100 @@
+import express from 'express';
+import bcrypt from 'bcryptjs';
+import { run, get } from '../db/database.js';
+import { generateToken, requireAuth } from '../middleware/auth.js';
+
+const router = express.Router();
+
+// Register new customer
+router.post('/register', async (req, res, next) => {
+  try {
+    const { name, email, password, phone } = req.body;
+    if (!name || !email || !password) {
+      return res.status(400).json({ success: false, error: 'Name, email, and password are required' });
+    }
+
+    const existing = await get('SELECT id FROM users WHERE email = ?', [email]);
+    if (existing) {
+      return res.status(400).json({ success: false, error: 'User with this email already exists' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const result = await run(
+      'INSERT INTO users (name, email, password_hash, phone, role) VALUES (?, ?, ?, ?, ?)',
+      [name, email, passwordHash, phone || null, 'CUSTOMER']
+    );
+
+    const user = { id: result.lastID, name, email, role: 'CUSTOMER' };
+    const token = generateToken(user);
+
+    res.json({ success: true, token, user });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Login
+router.post('/login', async (req, res, next) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ success: false, error: 'Email and password are required' });
+    }
+
+    const user = await get('SELECT * FROM users WHERE email = ?', [email]);
+    if (!user) {
+      return res.status(401).json({ success: false, error: 'Invalid credentials' });
+    }
+
+    const validPassword = await bcrypt.compare(password, user.password_hash);
+    if (!validPassword) {
+      return res.status(401).json({ success: false, error: 'Invalid credentials' });
+    }
+
+    const token = generateToken(user);
+    res.json({
+      success: true,
+      token,
+      user: { id: user.id, name: user.name, email: user.email, role: user.role, phone: user.phone },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Get current profile
+router.get('/me', requireAuth, async (req, res, next) => {
+  try {
+    const user = await get('SELECT id, name, email, phone, role, created_at FROM users WHERE id = ?', [req.user.id]);
+    const addresses = await query('SELECT * FROM addresses WHERE user_id = ?', [req.user.id]);
+    res.json({ success: true, user, addresses });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Add delivery address
+router.post('/address', requireAuth, async (req, res, next) => {
+  try {
+    const { name, phone, street_address, city, state, pincode, is_default } = req.body;
+    if (!name || !phone || !street_address || !city || !state || !pincode) {
+      return res.status(400).json({ success: false, error: 'All address fields are required' });
+    }
+
+    if (is_default) {
+      await run('UPDATE addresses SET is_default = 0 WHERE user_id = ?', [req.user.id]);
+    }
+
+    const result = await run(
+      `INSERT INTO addresses (user_id, name, phone, street_address, city, state, pincode, is_default)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [req.user.id, name, phone, street_address, city, state, pincode, is_default ? 1 : 0]
+    );
+
+    res.json({ success: true, address_id: result.lastID });
+  } catch (err) {
+    next(err);
+  }
+});
+
+export default router;
