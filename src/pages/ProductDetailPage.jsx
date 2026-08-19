@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { api } from '../services/api';
 import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
+import { SEO } from '../components/SEO';
 import { Star, Heart, ShoppingBag, ShieldCheck, CheckCircle, Truck, RefreshCw, AlertCircle, Share2 } from 'lucide-react';
 
 export const ProductDetailPage = () => {
@@ -15,6 +17,13 @@ export const ProductDetailPage = () => {
   const [selectedImage, setSelectedImage] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState('description');
+  const { user } = useAuth();
+
+  // Review Form State
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewText, setReviewText] = useState('');
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewMessage, setReviewMessage] = useState(null);
 
   useEffect(() => {
     setLoading(true);
@@ -62,8 +71,39 @@ export const ProductDetailPage = () => {
     }
   };
 
+  // Build Product JSON-LD Schema
+  const productSchema = {
+    '@context': 'https://schema.org/',
+    '@type': 'Product',
+    name: product.name,
+    image: selectedImage || (product.images && product.images[0]?.image_url),
+    description: product.short_desc || product.description,
+    brand: {
+      '@type': 'Brand',
+      name: 'Parthvi Ayurveda',
+    },
+    offers: {
+      '@type': 'Offer',
+      priceCurrency: 'INR',
+      price: currentPrice,
+      availability: currentStock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+      url: window.location.href,
+    },
+    aggregateRating: {
+      '@type': 'AggregateRating',
+      ratingValue: product.avg_rating || '5.0',
+      reviewCount: product.review_count || '1',
+    },
+  };
+
   return (
     <div className="max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop py-8 space-y-12">
+      <SEO
+        title={`${product.name} — Parthvi Ayurveda`}
+        description={product.short_desc || product.description}
+        image={selectedImage}
+        schema={productSchema}
+      />
       
       {/* Breadcrumb */}
       <nav className="text-xs font-label uppercase text-on-surface-variant flex items-center gap-2">
@@ -299,7 +339,7 @@ export const ProductDetailPage = () => {
       {/* Customer Reviews Section */}
       <section className="bg-surface rounded-2xl border border-outline/20 p-6 md:p-10 space-y-6">
         <h3 className="font-display text-2xl font-bold text-primary">Customer Reviews</h3>
-        
+
         {product.reviews && product.reviews.length > 0 ? (
           <div className="space-y-4">
             {product.reviews.map((rev) => (
@@ -325,6 +365,83 @@ export const ProductDetailPage = () => {
           </div>
         ) : (
           <p className="text-xs text-on-surface-variant font-body">No reviews submitted yet for this formulation.</p>
+        )}
+
+        {/* Write a Review Form */}
+        {user ? (
+          <div className="border-t border-outline/10 pt-6 space-y-4">
+            <h4 className="font-display text-lg font-bold text-primary">Write a Review</h4>
+
+            {reviewMessage && (
+              <div className={`p-3 rounded-lg text-xs font-body ${reviewMessage.type === 'success' ? 'bg-primary/10 text-primary border border-primary/20' : 'bg-error-container/30 text-error border border-error/30'}`}>
+                {reviewMessage.text}
+              </div>
+            )}
+
+            <div className="space-y-3">
+              {/* Star Rating Selector */}
+              <div>
+                <label className="block font-body text-xs font-semibold text-on-surface mb-2">Your Rating</label>
+                <div className="flex gap-1">
+                  {[1, 2, 3, 4, 5].map(star => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setReviewRating(star)}
+                      className="transition-transform hover:scale-110"
+                    >
+                      <Star
+                        size={24}
+                        className={star <= reviewRating ? 'text-gold-leaf' : 'text-outline/30'}
+                        fill={star <= reviewRating ? 'currentColor' : 'none'}
+                      />
+                    </button>
+                  ))}
+                  <span className="text-xs font-body text-on-surface-variant ml-2 self-center">{reviewRating}/5</span>
+                </div>
+              </div>
+
+              {/* Review Text */}
+              <div>
+                <label className="block font-body text-xs font-semibold text-on-surface mb-1">Your Review</label>
+                <textarea
+                  value={reviewText}
+                  onChange={(e) => setReviewText(e.target.value)}
+                  rows={3}
+                  placeholder="Share your experience with this Ayurvedic formulation..."
+                  className="w-full px-3 py-2.5 bg-surface-container border border-outline/30 rounded-lg outline-none focus:border-gold-leaf text-xs font-body resize-none"
+                  required
+                />
+              </div>
+
+              <button
+                onClick={async () => {
+                  if (!reviewText.trim()) return;
+                  setReviewSubmitting(true);
+                  setReviewMessage(null);
+                  const res = await api.submitReview(product.id, reviewRating, reviewText);
+                  setReviewSubmitting(false);
+                  if (res.success) {
+                    setReviewMessage({ type: 'success', text: res.message || 'Review submitted! It will appear after moderation.' });
+                    setReviewText('');
+                    setReviewRating(5);
+                  } else {
+                    setReviewMessage({ type: 'error', text: res.error || 'Failed to submit review' });
+                  }
+                }}
+                disabled={reviewSubmitting || !reviewText.trim()}
+                className="bg-primary text-on-primary font-label text-xs font-bold uppercase px-6 py-2.5 rounded-full hover:bg-primary-container transition-colors disabled:opacity-50"
+              >
+                {reviewSubmitting ? 'Submitting...' : 'Submit Review'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="border-t border-outline/10 pt-4">
+            <p className="text-xs font-body text-on-surface-variant">
+              <a href="/account?login=true" className="text-gold-leaf font-bold hover:underline">Sign in</a> to write a review for this product.
+            </p>
+          </div>
         )}
       </section>
 

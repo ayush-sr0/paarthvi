@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import { useCart } from '../context/CartContext';
+import { SEO } from '../components/SEO';
 import { ArrowRight, Star, Heart, ShoppingBag, CheckCircle, ChevronLeft, ChevronRight, Play, Gift, Sparkles, Leaf, Mountain, ShieldCheck, HeartHandshake } from 'lucide-react';
 
 export const HomePage = () => {
@@ -13,7 +14,7 @@ export const HomePage = () => {
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
 
-  const banners = [
+  const [banners, setBanners] = useState([
     {
       title: 'Restore Balance with Sacred Ayurveda',
       subtitle: 'Discover our premium collection of authentic herbal remedies crafted to harmonize your mind, body, and spirit.',
@@ -28,16 +29,32 @@ export const HomePage = () => {
       ctaUrl: '/shop?sort=bestseller',
       desktopImage: 'https://images.unsplash.com/photo-1512290900673-0ff7656910be?auto=format&fit=crop&q=80&w=1600',
     },
-  ];
+  ]);
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setCurrentBannerIndex(prev => (prev + 1) % banners.length);
+      setBanners(prev => {
+        if (prev.length === 0) return prev;
+        setCurrentBannerIndex(curr => (curr + 1) % prev.length);
+        return prev;
+      });
     }, 6000);
     return () => clearInterval(interval);
-  }, [banners.length]);
+  }, []);
 
   useEffect(() => {
+    api.getCmsBanners().then(data => {
+      if (data.success && data.banners && data.banners.length > 0) {
+        setBanners(data.banners.map(b => ({
+          title: b.title,
+          subtitle: b.subtitle,
+          ctaText: b.cta_text || 'Shop Now',
+          ctaUrl: b.cta_url || '/shop',
+          desktopImage: b.desktop_image,
+        })));
+      }
+    });
+
     api.getCategories().then(data => {
       if (data.success) setCategories(data.categories || []);
     });
@@ -51,6 +68,10 @@ export const HomePage = () => {
 
   return (
     <div className="space-y-12 md:space-y-20 pb-20 max-w-[1360px] mx-auto overflow-hidden">
+      <SEO
+        title="Parthvi Ayurveda — Authentic Herbal Remedies & Modern Wellness"
+        description="Discover sacred Ayurvedic formulations, Himalayan Shilajit, Kshirpak hair oils, and organic wellness rasayanas crafted to harmonize body, mind, and spirit."
+      />
       
       {/* Hero Section (Reference code.html) */}
       <section className="relative w-full px-margin-mobile md:px-margin-desktop pt-6">

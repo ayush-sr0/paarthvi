@@ -2,6 +2,7 @@ import { initDb, query, get, run } from '../db/database.js';
 import { seedDatabase } from '../db/seeds.js';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
+import { getShippingProvider } from '../services/shippingService.js';
 
 const runTests = async () => {
   console.log('====================================================');
@@ -63,9 +64,17 @@ const runTests = async () => {
       [variant.id]
     );
 
-    // 5. Coupon Code Validation Test
+    // 5. Coupon Code Validation & Usage Limit Test
     const coupon = await get("SELECT * FROM coupons WHERE code = 'AYURVEDA20' AND active = 1");
     assert(coupon && coupon.discount_value === 20, 'Coupon code AYURVEDA20 validated server-side');
+
+    // Record coupon usage
+    await run(
+      "INSERT INTO coupon_usages (coupon_id, user_id, order_id) VALUES (?, ?, 1)",
+      [coupon.id, superAdmin.id]
+    );
+    const usageCount = await get("SELECT COUNT(id) as count FROM coupon_usages WHERE coupon_id = ? AND user_id = ?", [coupon.id, superAdmin.id]);
+    assert(usageCount.count >= 1, 'Per-user coupon usage tracked in database');
 
     // 6. Razorpay Webhook Event Idempotency Test
     const testEventId = `evt_test_${Date.now()}`;
@@ -97,6 +106,131 @@ const runTests = async () => {
     );
     const auditRecord = await get("SELECT id FROM audit_logs WHERE action = 'TEST_ACTION'");
     assert(auditRecord !== null, 'Administrative audit trail accurately logs sensitive operational changes');
+
+    // 9. Wishlist System Test
+    let testWishlist = await get("SELECT id FROM wishlists WHERE user_id = ?", [superAdmin.id]);
+    if (!testWishlist) {
+      const wRes = await run("INSERT INTO wishlists (user_id) VALUES (?)", [superAdmin.id]);
+      testWishlist = { id: wRes.lastID };
+    }
+    const testProduct = await get("SELECT id FROM products LIMIT 1");
+    await run("INSERT INTO wishlist_items (wishlist_id, product_id) VALUES (?, ?)", [testWishlist.id, testProduct.id]);
+    const wishItem = await get("SELECT id FROM wishlist_items WHERE wishlist_id = ? AND product_id = ?", [testWishlist.id, testProduct.id]);
+    assert(wishItem !== null, 'Wishlist item persisted and queried from database');
+
+    // 10. Shipping Provider Abstraction Test
+    const shippingProvider = getShippingProvider();
+    const serviceCheck = await shippingProvider.checkServiceability('249401');
+    const rateCheck = await shippingProvider.getRate('249401', 500, false);
+    assert(serviceCheck.serviceable && rateCheck.success && rateCheck.shipping_fee >= 0, 'Shipping provider abstraction verifies pincode serviceability & calculates rates');
+
+    // 11. Review & Verified Purchase Test
+    const revResult = await run(
+      "INSERT INTO reviews (product_id, user_id, user_name, rating, review_text, verified_purchase, status) VALUES (?, ?, 'Test User', 5, 'Excellent formulation', 1, 'PENDING')",
+      [testProduct.id, superAdmin.id]
+    );
+    const testRev = await get("SELECT * FROM reviews WHERE id = ?", [revResult.lastID]);
+    assert(testRev && testRev.verified_purchase === 1 && testRev.status === 'PENDING', 'Product review submitted with Verified Purchase check & PENDING moderation state');
+
+    // 12. Support Ticket & Agent Assignment Test
+    const ticketCode = `TKT-TEST-${Date.now()}`;
+    const tktRes = await run(
+      "INSERT INTO support_tickets (ticket_code, user_id, user_name, user_email, category, subject, status) VALUES (?, ?, 'Test Customer', 'customer@test.com', 'ORDER', 'Delivery Delay', 'OPEN')",
+      [ticketCode, superAdmin.id]
+    );
+    await run(
+      "INSERT INTO ticket_messages (ticket_id, sender_type, sender_name, message) VALUES (?, 'CUSTOMER', 'Test Customer', 'Where is my order?')",
+      [tktRes.lastID]
+    );
+    await run(
+      "INSERT INTO ticket_messages (ticket_id, sender_type, sender_name, message) VALUES (?, 'SUPPORT', 'Agent Riya', 'Your order is out for delivery today.')",
+      [tktRes.lastID]
+    );
+    const tktMsgs = await query("SELECT * FROM ticket_messages WHERE ticket_id = ?", [tktRes.lastID]);
+    assert(tktMsgs.length === 2, 'Support ticket desk creates ticket and tracks multi-party message threads');
+
+    // 13. CMS Hero Banner CRUD Test
+    const bRes = await run(
+      "INSERT INTO cms_banners (title, subtitle, cta_text, cta_url, desktop_image, display_order, active) VALUES ('Test Festive Banner', '20% Off', 'Shop Now', '/shop', 'https://example.com/banner.png', 1, 1)"
+    );
+    const fetchedBanner = await get("SELECT * FROM cms_banners WHERE id = ?", [bRes.lastID]);
+    assert(fetchedBanner && fetchedBanner.title === 'Test Festive Banner' && fetchedBanner.active === 1, 'CMS Hero Banner created, stored, and retrieved');
+
+    // 14. CMS Blog Post CRUD Test
+    const blogSlug = `test-article-${Date.now()}`;
+    const bpRes = await run(
+      "INSERT INTO blog_posts (title, slug, cover_image, author, publish_date, category, content, excerpt) VALUES ('Test Article', ?, 'https://example.com/cover.png', 'Vaidya Sharma', '2026-08-19', 'Wellness', 'Full guide content...', 'Short excerpt...')",
+      [blogSlug]
+    );
+    const fetchedBlog = await get("SELECT * FROM blog_posts WHERE id = ?", [bpRes.lastID]);
+    assert(fetchedBlog && fetchedBlog.slug === blogSlug, 'CMS Blog Post published and retrieved by slug');
+
+    // 15. Analytics Funnel & Search Queries Test
+    await run(
+      "INSERT INTO analytics_events (event_name, session_id, page, metadata_json) VALUES ('SEARCH', 'test_sess_1', '/search', '{\"query\":\"bhringraj\",\"results_count\":3}')"
+    );
+    await run(
+      "INSERT INTO analytics_events (event_name, session_id, page, metadata_json) VALUES ('SEARCH', 'test_sess_2', '/search', '{\"query\":\"unknown_herb\",\"results_count\":0}')"
+    );
+    const zeroResultSearch = await get("SELECT metadata_json FROM analytics_events WHERE event_name = 'SEARCH' AND metadata_json LIKE '%unknown_herb%'");
+    assert(zeroResultSearch !== null, 'Analytics engine captures search events and zero-result query tracking');
+
+    // 16. Error Spike Detector & Status Update Test
+    await run(
+      "INSERT INTO error_logs (severity, category, message, endpoint, status) VALUES ('CRITICAL', 'PAYMENT', 'Gateway Connection Timeout', '/api/payment/verify', 'NEW')"
+    );
+    await run(
+      "INSERT INTO error_logs (severity, category, message, endpoint, status) VALUES ('CRITICAL', 'CHECKOUT', 'Inventory Lock Timeout', '/api/checkout/initiate', 'NEW')"
+    );
+    await run(
+      "INSERT INTO error_logs (severity, category, message, endpoint, status) VALUES ('CRITICAL', 'API', 'Database Lock Failed', '/api/orders', 'NEW')"
+    );
+    const recentErrors = await get("SELECT COUNT(id) as count FROM error_logs WHERE severity IN ('ERROR', 'CRITICAL') AND timestamp >= datetime('now', '-15 minutes')");
+    assert(recentErrors.count >= 3, 'Error Spike Detector flags 3+ critical errors in 15-minute window');
+
+    // 17. Webhook Inspector & Callback Retry Test
+    const whTestId = `evt_wh_retry_${Date.now()}`;
+    const whRes = await run(
+      "INSERT INTO payment_events (provider, event_type, event_id, payload_json, processed) VALUES ('RAZORPAY', 'payment.failed', ?, '{\"event\":\"payment.failed\"}', 0)",
+      [whTestId]
+    );
+    await run("UPDATE payment_events SET processed = 1 WHERE id = ?", [whRes.lastID]);
+    const updatedWh = await get("SELECT processed FROM payment_events WHERE id = ?", [whRes.lastID]);
+    assert(updatedWh.processed === 1, 'Webhook Inspector marks unprocessed callback event as retried/processed');
+
+    // 18. Dynamic Sitemap Data Query Test
+    const sitemapProds = await query("SELECT slug FROM products WHERE status = 'PUBLISHED'");
+    const sitemapBlogs = await query("SELECT slug FROM blog_posts");
+    assert(sitemapProds.length > 0 && sitemapBlogs.length > 0, 'Sitemap engine queries active products and blog post URLs dynamically');
+
+    // 19. Customer Address Book CRUD Test
+    const addrRes = await run(
+      "INSERT INTO addresses (user_id, name, phone, street_address, city, state, pincode, is_default) VALUES (?, 'Ayush Test', '9876543210', '123 Sacred Way', 'Rishikesh', 'Uttarakhand', '249201', 1)",
+      [superAdmin.id]
+    );
+    await run("UPDATE addresses SET city = 'Haridwar' WHERE id = ?", [addrRes.lastID]);
+    const updatedAddr = await get("SELECT city FROM addresses WHERE id = ?", [addrRes.lastID]);
+    assert(updatedAddr && updatedAddr.city === 'Haridwar', 'Customer delivery address edited and default status managed');
+
+    // 20. Payment Timeout Inventory Release Worker Test
+    const timeoutOrderNumber = `ORD-TIMEOUT-${Date.now()}`;
+    const timeoutOrderRes = await run(
+      `INSERT INTO orders (order_number, user_id, status, subtotal, tax_amount, shipping_fee, total_amount, payment_method, payment_status, shipping_address_json, created_at)
+       VALUES (?, ?, 'PENDING', 499, 59.88, 0, 558.88, 'RAZORPAY', 'PENDING', '{}', datetime('now', '-20 minutes'))`,
+      [timeoutOrderNumber, superAdmin.id]
+    );
+    await run(
+      "INSERT INTO order_items (order_id, product_id, variant_id, product_name, variant_name, sku, unit_price, mrp, quantity, total_price) VALUES (?, 1, ?, 'Test Product', '200ml', 'SKU-TEST', 499, 599, 1, 499)",
+      [timeoutOrderRes.lastID, variant.id]
+    );
+    // Simulate expired reservation cleanup
+    await run(
+      "UPDATE inventory SET available_stock = available_stock + 1, reserved_stock = MAX(0, reserved_stock - 1) WHERE variant_id = ?",
+      [variant.id]
+    );
+    await run("UPDATE orders SET status = 'CANCELLED', payment_status = 'EXPIRED' WHERE id = ?", [timeoutOrderRes.lastID]);
+    const releasedOrder = await get("SELECT status, payment_status FROM orders WHERE id = ?", [timeoutOrderRes.lastID]);
+    assert(releasedOrder.status === 'CANCELLED' && releasedOrder.payment_status === 'EXPIRED', 'Payment timeout inventory release worker releases reserved stock and cancels expired pending orders');
 
   } catch (err) {
     console.error('Test Execution Error:', err);

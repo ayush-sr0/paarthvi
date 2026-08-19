@@ -1,7 +1,11 @@
 import express from 'express';
 import { query, get, run } from '../db/database.js';
+import { authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
+
+// Use authenticateToken to optionally identify user for coupon checks
+router.use(authenticateToken);
 
 // Get active cart for user or guest session
 router.post('/sync', async (req, res, next) => {
@@ -57,9 +61,10 @@ router.post('/sync', async (req, res, next) => {
       }
     }
 
-    // Coupon validation
+    // Coupon validation with per-user limit check
     let discount_amount = 0;
     let applied_coupon = null;
+    let coupon_error = null;
 
     if (coupon_code) {
       const coupon = await get(
@@ -67,8 +72,29 @@ router.post('/sync', async (req, res, next) => {
         [coupon_code]
       );
 
-      if (coupon) {
-        if (subtotal >= coupon.min_cart_value) {
+      if (!coupon) {
+        coupon_error = 'Invalid or expired coupon code';
+      } else if (subtotal < coupon.min_cart_value) {
+        coupon_error = `Minimum order value of ₹${coupon.min_cart_value} required`;
+      } else {
+        // Check global usage limit
+        const globalUsage = await get('SELECT COUNT(id) as count FROM coupon_usages WHERE coupon_id = ?', [coupon.id]);
+        if (globalUsage.count >= coupon.usage_limit) {
+          coupon_error = 'Coupon usage limit reached';
+        }
+
+        // Check per-user limit
+        if (!coupon_error && req.user) {
+          const userUsage = await get(
+            'SELECT COUNT(id) as count FROM coupon_usages WHERE coupon_id = ? AND user_id = ?',
+            [coupon.id, req.user.id]
+          );
+          if (userUsage.count >= coupon.per_user_limit) {
+            coupon_error = `You have already used this coupon ${coupon.per_user_limit} time(s)`;
+          }
+        }
+
+        if (!coupon_error) {
           if (coupon.discount_type === 'PERCENT') {
             discount_amount = (subtotal * coupon.discount_value) / 100;
             if (coupon.max_discount > 0) {
@@ -103,6 +129,7 @@ router.post('/sync', async (req, res, next) => {
       discount_amount: Math.round(discount_amount * 100) / 100,
       total_amount,
       applied_coupon,
+      coupon_error,
     });
   } catch (err) {
     next(err);

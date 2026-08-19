@@ -32,11 +32,44 @@ export const api = {
     return res.json();
   },
 
-  async addAddress(address) {
+  async addAddress(addressData) {
     const res = await fetch(`${API_BASE}/auth/address`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-      body: JSON.stringify(address),
+      body: JSON.stringify(addressData),
+    });
+    return res.json();
+  },
+
+  async updateAddress(addressId, addressData) {
+    const res = await fetch(`${API_BASE}/auth/address/${addressId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify(addressData),
+    });
+    return res.json();
+  },
+
+  async deleteAddress(addressId) {
+    const res = await fetch(`${API_BASE}/auth/address/${addressId}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    });
+    return res.json();
+  },
+
+  async setDefaultAddress(addressId) {
+    const res = await fetch(`${API_BASE}/auth/address/${addressId}/default`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+    });
+    return res.json();
+  },
+
+  async releaseExpiredReservations() {
+    const res = await fetch(`${API_BASE}/checkout/release-expired-reservations`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
     });
     return res.json();
   },
@@ -209,8 +242,30 @@ export const api = {
     return res.json();
   },
 
-  async getAdminErrorLogs() {
-    const res = await fetch(`${API_BASE}/admin/system/error-logs`, { headers: getAuthHeaders() });
+  async getAdminErrorLogs(severity = '', status = '') {
+    const res = await fetch(`${API_BASE}/admin/system/error-logs?severity=${severity}&status=${status}`, { headers: getAuthHeaders() });
+    return res.json();
+  },
+
+  async updateErrorLogStatus(logId, status) {
+    const res = await fetch(`${API_BASE}/admin/system/error-logs/${logId}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify({ status }),
+    });
+    return res.json();
+  },
+
+  async getAdminWebhooks() {
+    const res = await fetch(`${API_BASE}/admin/system/webhooks`, { headers: getAuthHeaders() });
+    return res.json();
+  },
+
+  async retryWebhook(webhookId) {
+    const res = await fetch(`${API_BASE}/admin/system/webhooks/${webhookId}/retry`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+    });
     return res.json();
   },
 
@@ -238,5 +293,185 @@ export const api = {
         body: JSON.stringify({ event_name: eventName, session_id: sessionId, page, metadata }),
       });
     } catch (e) {}
+  },
+
+  // Wishlist APIs
+  async getWishlist() {
+    const res = await fetch(`${API_BASE}/wishlist`, { headers: getAuthHeaders() });
+    return res.json();
+  },
+
+  async getWishlistIds() {
+    const res = await fetch(`${API_BASE}/wishlist/ids`, { headers: getAuthHeaders() });
+    return res.json();
+  },
+
+  async toggleWishlistItem(productId) {
+    const res = await fetch(`${API_BASE}/wishlist/toggle`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify({ product_id: productId }),
+    });
+    return res.json();
+  },
+
+  async moveWishlistToCart(productId) {
+    const res = await fetch(`${API_BASE}/wishlist/move-to-cart`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify({ product_id: productId }),
+    });
+    return res.json();
+  },
+
+  // Reviews APIs
+  async submitReview(productId, rating, reviewText) {
+    const res = await fetch(`${API_BASE}/reviews`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify({ product_id: productId, rating, review_text: reviewText }),
+    });
+    return res.json();
+  },
+
+  // Support Ticket APIs (Customer)
+  async createTicket(subject, category, message, orderId = null) {
+    const res = await fetch(`${API_BASE}/support/tickets`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify({ subject, category, message, order_id: orderId }),
+    });
+    return res.json();
+  },
+
+  async getMyTickets() {
+    const res = await fetch(`${API_BASE}/support/tickets`, { headers: getAuthHeaders() });
+    return res.json();
+  },
+
+  async getTicketDetail(ticketId) {
+    const res = await fetch(`${API_BASE}/support/tickets/${ticketId}`, { headers: getAuthHeaders() });
+    return res.json();
+  },
+
+  async sendTicketMessage(ticketId, message) {
+    const res = await fetch(`${API_BASE}/support/tickets/${ticketId}/message`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify({ message }),
+    });
+    return res.json();
+  },
+
+  // Admin Support Ticket APIs
+  async getAdminTickets(status = '', priority = '') {
+    const res = await fetch(`${API_BASE}/support/admin/tickets?status=${status}&priority=${priority}`, { headers: getAuthHeaders() });
+    return res.json();
+  },
+
+  async getAdminTicketDetail(ticketId) {
+    const res = await fetch(`${API_BASE}/support/admin/tickets/${ticketId}`, { headers: getAuthHeaders() });
+    return res.json();
+  },
+
+  async updateAdminTicket(ticketId, status, priority) {
+    const res = await fetch(`${API_BASE}/support/admin/tickets/${ticketId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify({ status, priority }),
+    });
+    return res.json();
+  },
+
+  async replyToTicket(ticketId, message) {
+    const res = await fetch(`${API_BASE}/support/admin/tickets/${ticketId}/reply`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify({ message }),
+    });
+    return res.json();
+  },
+
+  async assignTicket(ticketId, assignedTo) {
+    const res = await fetch(`${API_BASE}/support/admin/tickets/${ticketId}/assign`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify({ assigned_to: assignedTo }),
+    });
+    return res.json();
+  },
+
+  // CMS Banners APIs
+  async getCmsBanners() {
+    const res = await fetch(`${API_BASE}/cms/banners`);
+    return res.json();
+  },
+
+  async getAdminBanners() {
+    const res = await fetch(`${API_BASE}/cms/admin/banners`, { headers: getAuthHeaders() });
+    return res.json();
+  },
+
+  async createBanner(bannerData) {
+    const res = await fetch(`${API_BASE}/cms/banners`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify(bannerData),
+    });
+    return res.json();
+  },
+
+  async updateBanner(bannerId, bannerData) {
+    const res = await fetch(`${API_BASE}/cms/banners/${bannerId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify(bannerData),
+    });
+    return res.json();
+  },
+
+  async deleteBanner(bannerId) {
+    const res = await fetch(`${API_BASE}/cms/banners/${bannerId}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    });
+    return res.json();
+  },
+
+  // CMS Blog Post APIs
+  async getBlogPosts() {
+    const res = await fetch(`${API_BASE}/cms/blog-posts`);
+    return res.json();
+  },
+
+  async getBlogPostBySlug(slug) {
+    const res = await fetch(`${API_BASE}/cms/blog-posts/${slug}`);
+    return res.json();
+  },
+
+  async createBlogPost(postData) {
+    const res = await fetch(`${API_BASE}/cms/blog-posts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify(postData),
+    });
+    return res.json();
+  },
+
+  async updateBlogPost(postId, postData) {
+    const res = await fetch(`${API_BASE}/cms/blog-posts/${postId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify(postData),
+    });
+    return res.json();
+  },
+
+  async deleteBlogPost(postId) {
+    const res = await fetch(`${API_BASE}/cms/blog-posts/${postId}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    });
+    return res.json();
   },
 };

@@ -1,6 +1,6 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
-import { run, get } from '../db/database.js';
+import { run, get, query } from '../db/database.js';
 import { generateToken, requireAuth } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -66,7 +66,7 @@ router.post('/login', async (req, res, next) => {
 router.get('/me', requireAuth, async (req, res, next) => {
   try {
     const user = await get('SELECT id, name, email, phone, role, created_at FROM users WHERE id = ?', [req.user.id]);
-    const addresses = await query('SELECT * FROM addresses WHERE user_id = ?', [req.user.id]);
+    const addresses = await query('SELECT * FROM addresses WHERE user_id = ? ORDER BY is_default DESC, id DESC', [req.user.id]);
     res.json({ success: true, user, addresses });
   } catch (err) {
     next(err);
@@ -92,6 +92,72 @@ router.post('/address', requireAuth, async (req, res, next) => {
     );
 
     res.json({ success: true, address_id: result.lastID });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Edit delivery address
+router.put('/address/:id', requireAuth, async (req, res, next) => {
+  try {
+    const addressId = req.params.id;
+    const existing = await get('SELECT * FROM addresses WHERE id = ? AND user_id = ?', [addressId, req.user.id]);
+    if (!existing) {
+      return res.status(404).json({ success: false, error: 'Address not found' });
+    }
+
+    const { name, phone, street_address, city, state, pincode, is_default } = req.body;
+
+    if (is_default) {
+      await run('UPDATE addresses SET is_default = 0 WHERE user_id = ?', [req.user.id]);
+    }
+
+    await run(
+      `UPDATE addresses
+       SET name = ?, phone = ?, street_address = ?, city = ?, state = ?, pincode = ?, is_default = ?
+       WHERE id = ? AND user_id = ?`,
+      [
+        name || existing.name,
+        phone || existing.phone,
+        street_address || existing.street_address,
+        city || existing.city,
+        state || existing.state,
+        pincode || existing.pincode,
+        is_default !== undefined ? (is_default ? 1 : 0) : existing.is_default,
+        addressId,
+        req.user.id,
+      ]
+    );
+
+    res.json({ success: true, message: 'Address updated successfully' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Delete delivery address
+router.delete('/address/:id', requireAuth, async (req, res, next) => {
+  try {
+    const addressId = req.params.id;
+    const existing = await get('SELECT * FROM addresses WHERE id = ? AND user_id = ?', [addressId, req.user.id]);
+    if (!existing) {
+      return res.status(404).json({ success: false, error: 'Address not found' });
+    }
+
+    await run('DELETE FROM addresses WHERE id = ? AND user_id = ?', [addressId, req.user.id]);
+    res.json({ success: true, message: 'Address deleted successfully' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Set default delivery address
+router.put('/address/:id/default', requireAuth, async (req, res, next) => {
+  try {
+    const addressId = req.params.id;
+    await run('UPDATE addresses SET is_default = 0 WHERE user_id = ?', [req.user.id]);
+    await run('UPDATE addresses SET is_default = 1 WHERE id = ? AND user_id = ?', [addressId, req.user.id]);
+    res.json({ success: true, message: 'Default address updated' });
   } catch (err) {
     next(err);
   }

@@ -13,6 +13,7 @@ export const CartProvider = ({ children }) => {
     return saved ? JSON.parse(saved) : [];
   });
   const [couponCode, setCouponCode] = useState(() => localStorage.getItem('parthvi_coupon') || '');
+  const [couponError, setCouponError] = useState(null);
   const [cartSummary, setCartSummary] = useState({
     items: [],
     subtotal: 0,
@@ -24,6 +25,9 @@ export const CartProvider = ({ children }) => {
   });
   const [isCartOpen, setIsCartOpen] = useState(false);
 
+  // Check if user is logged in
+  const isLoggedIn = () => !!localStorage.getItem('parthvi_token');
+
   // Sync cart with backend server for pricing and inventory calculations
   useEffect(() => {
     localStorage.setItem('parthvi_cart', JSON.stringify(cartItems));
@@ -31,6 +35,7 @@ export const CartProvider = ({ children }) => {
       api.syncCart(cartItems, couponCode).then(data => {
         if (data.success) {
           setCartSummary(data);
+          setCouponError(data.coupon_error || null);
         }
       });
     } else {
@@ -43,8 +48,21 @@ export const CartProvider = ({ children }) => {
         total_amount: 0,
         applied_coupon: null,
       });
+      setCouponError(null);
     }
   }, [cartItems, couponCode]);
+
+  // Sync wishlist with backend when user is logged in
+  useEffect(() => {
+    if (isLoggedIn()) {
+      api.getWishlistIds().then(data => {
+        if (data.success) {
+          setWishlist(data.product_ids);
+          localStorage.setItem('parthvi_wishlist', JSON.stringify(data.product_ids));
+        }
+      }).catch(() => {});
+    }
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('parthvi_wishlist', JSON.stringify(wishlist));
@@ -79,6 +97,7 @@ export const CartProvider = ({ children }) => {
   const clearCart = () => {
     setCartItems([]);
     setCouponCode('');
+    setCouponError(null);
     localStorage.removeItem('parthvi_coupon');
   };
 
@@ -89,16 +108,31 @@ export const CartProvider = ({ children }) => {
 
   const removeCoupon = () => {
     setCouponCode('');
+    setCouponError(null);
     localStorage.removeItem('parthvi_coupon');
   };
 
-  const toggleWishlist = (productId) => {
-    setWishlist(prev => {
-      if (prev.includes(productId)) {
-        return prev.filter(id => id !== productId);
+  const toggleWishlist = async (productId) => {
+    if (isLoggedIn()) {
+      // Sync with backend
+      const res = await api.toggleWishlistItem(productId);
+      if (res.success) {
+        setWishlist(prev => {
+          if (res.action === 'removed') {
+            return prev.filter(id => id !== productId);
+          }
+          return [...prev, productId];
+        });
       }
-      return [...prev, productId];
-    });
+    } else {
+      // Guest: localStorage only
+      setWishlist(prev => {
+        if (prev.includes(productId)) {
+          return prev.filter(id => id !== productId);
+        }
+        return [...prev, productId];
+      });
+    }
     api.trackEvent('WISHLIST_TOGGLE', window.location.pathname, { product_id: productId });
   };
 
@@ -110,6 +144,7 @@ export const CartProvider = ({ children }) => {
         cartItems,
         cartSummary,
         couponCode,
+        couponError,
         isCartOpen,
         setIsCartOpen,
         totalCartCount,

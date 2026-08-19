@@ -80,9 +80,11 @@ export const Header = () => {
           <nav className="hidden lg:flex items-center gap-8 font-label text-xs uppercase tracking-wider font-semibold text-on-surface-variant">
             <Link to="/" className={`hover:text-primary transition-colors ${location.pathname === '/' ? 'text-primary font-bold' : ''}`}>Home</Link>
             <Link to="/shop" className={`hover:text-primary transition-colors ${location.pathname === '/shop' ? 'text-primary font-bold' : ''}`}>Shop</Link>
+            <Link to="/dosha-quiz" className="bg-gold-leaf/20 text-gold-leaf px-2.5 py-1 rounded-full font-bold hover:bg-gold-leaf hover:text-white transition-all flex items-center gap-1">
+              <Sparkles size={12} /> Dosha Quiz
+            </Link>
             <Link to="/shop?category=hair-care" className="hover:text-primary transition-colors">Hair Care</Link>
             <Link to="/shop?category=nutrition-supplements" className="hover:text-primary transition-colors">Nutrition</Link>
-            <Link to="/shop?sort=bestseller" className="hover:text-primary transition-colors">Best Sellers</Link>
             <Link to="/wellness-knowledge" className="hover:text-primary transition-colors">Wellness Guide</Link>
             {user && user.role !== 'CUSTOMER' && (
               <Link to="/admin" className="text-gold-leaf font-bold hover:underline flex items-center gap-1">

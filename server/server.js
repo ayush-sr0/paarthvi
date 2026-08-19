@@ -14,6 +14,11 @@ import paymentRoutes from './routes/paymentRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import analyticsRoutes from './routes/analyticsRoutes.js';
+import wishlistRoutes from './routes/wishlistRoutes.js';
+import reviewRoutes from './routes/reviewRoutes.js';
+import supportRoutes from './routes/supportRoutes.js';
+import cmsRoutes from './routes/cmsRoutes.js';
+import seoRoutes from './routes/seoRoutes.js';
 
 import { errorHandler } from './middleware/errorLogger.js';
 
@@ -27,6 +32,9 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Sitemap & Robots.txt Routes (Root level)
+app.use('/', seoRoutes);
 
 // Health Check API
 app.get('/api/health', (req, res) => {
@@ -46,6 +54,10 @@ app.use('/api/payment', paymentRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/wishlist', wishlistRoutes);
+app.use('/api/reviews', reviewRoutes);
+app.use('/api/support', supportRoutes);
+app.use('/api/cms', cmsRoutes);
 
 // Static assets (if serving built frontend in production)
 const distPath = path.join(__dirname, '../dist');

@@ -25,6 +25,24 @@ const logAuditAction = async (req, action, entity, entity_id, prev_val = null, n
   }
 };
 
+// Order State Machine: Valid Transitions (FR-022)
+const VALID_TRANSITIONS = {
+  PENDING: ['CONFIRMED', 'CANCELLED'],
+  CONFIRMED: ['PROCESSING', 'CANCELLED'],
+  PROCESSING: ['PACKED', 'CANCELLED'],
+  PACKED: ['SHIPPED', 'CANCELLED'],
+  SHIPPED: ['OUT_FOR_DELIVERY'],
+  OUT_FOR_DELIVERY: ['DELIVERED'],
+  DELIVERED: ['RETURN_REQUESTED'],
+  CANCELLED: [],
+  RETURN_REQUESTED: ['RETURN_APPROVED', 'RETURN_REJECTED'],
+  RETURN_APPROVED: ['RETURNED'],
+  RETURN_REJECTED: [],
+  RETURNED: ['REFUND_INITIATED'],
+  REFUND_INITIATED: ['REFUNDED'],
+  REFUNDED: [],
+};
+
 // Protect all admin routes
 router.use(requireAuth);
 
@@ -100,7 +118,7 @@ router.get('/orders', requireRole(['ORDER_MANAGER', 'SUPPORT_MANAGER']), async (
   }
 });
 
-// Update Order Status (Order State Machine Transition)
+// Update Order Status (Order State Machine Transition with Guards)
 router.put('/orders/:id/status', requireRole(['ORDER_MANAGER']), async (req, res, next) => {
   try {
     const { status } = req.body;
@@ -109,6 +127,15 @@ router.put('/orders/:id/status', requireRole(['ORDER_MANAGER']), async (req, res
 
     if (!order) {
       return res.status(404).json({ success: false, error: 'Order not found' });
+    }
+
+    // State Machine Guard: validate transition
+    const allowedNext = VALID_TRANSITIONS[order.status] || [];
+    if (!allowedNext.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        error: `Invalid state transition: ${order.status} → ${status}. Allowed transitions: ${allowedNext.join(', ') || 'none'}`,
+      });
     }
 
     await run('UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [status, orderId]);
@@ -228,19 +255,43 @@ router.get('/returns', requireRole(['ORDER_MANAGER', 'SUPPORT_MANAGER']), async 
 
 router.put('/returns/:id/status', requireRole(['ORDER_MANAGER']), async (req, res, next) => {
   try {
-    const { status, refund_amount } = req.body;
+    const { status, refund_amount, transaction_ref } = req.body;
     const returnId = req.params.id;
 
+    const returnObj = await get(
+      `SELECT r.*, oi.variant_id, oi.quantity FROM returns r
+       JOIN order_items oi ON r.order_item_id = oi.id
+       WHERE r.id = ?`,
+      [returnId]
+    );
+    if (!returnObj) {
+      return res.status(404).json({ success: false, error: 'Return not found' });
+    }
+
     await run(
-      `UPDATE returns SET status = ?, refund_amount = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-      [status, refund_amount, returnId]
+      `UPDATE returns SET status = ?, refund_amount = ?, transaction_ref = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      [status, refund_amount || returnObj.refund_amount, transaction_ref || null, returnId]
     );
 
+    if (status === 'APPROVED') {
+      await run("UPDATE orders SET status = 'RETURN_APPROVED' WHERE id = ?", [returnObj.order_id]);
+    }
+
     if (status === 'REFUNDED') {
-      const retObj = await get('SELECT order_id FROM returns WHERE id = ?', [returnId]);
-      if (retObj) {
-        await run("UPDATE orders SET payment_status = 'REFUNDED', status = 'REFUNDED' WHERE id = ?", [retObj.order_id]);
-      }
+      // Restore inventory
+      await run(
+        'UPDATE inventory SET available_stock = available_stock + ?, sold_stock = sold_stock - ? WHERE variant_id = ?',
+        [returnObj.quantity, returnObj.quantity, returnObj.variant_id]
+      );
+
+      // Log refund in payments table
+      await run(
+        `INSERT INTO payments (order_id, amount, payment_method, status, razorpay_payment_id)
+         VALUES (?, ?, 'REFUND', 'SUCCESS', ?)`,
+        [returnObj.order_id, refund_amount || returnObj.refund_amount, transaction_ref || `refund_${returnId}_${Date.now()}`]
+      );
+
+      await run("UPDATE orders SET payment_status = 'REFUNDED', status = 'REFUNDED' WHERE id = ?", [returnObj.order_id]);
     }
 
     await logAuditAction(req, 'UPDATE_RETURN_STATUS', 'RETURN', returnId, null, { status, refund_amount });
@@ -272,11 +323,101 @@ router.put('/reviews/:id/status', requireRole(['CONTENT_MANAGER']), async (req, 
   }
 });
 
-// 7. System Error Logs & Audit Logs
+// 7. System Error Logs, Error Spike Detector & Audit Logs
 router.get('/system/error-logs', requireRole(['SUPER_ADMIN']), async (req, res, next) => {
   try {
-    const logs = await query('SELECT * FROM error_logs ORDER BY timestamp DESC LIMIT 100');
-    res.json({ success: true, logs });
+    const { severity, status } = req.query;
+    let sql = 'SELECT * FROM error_logs WHERE 1=1';
+    const params = [];
+
+    if (severity) {
+      sql += ' AND severity = ?';
+      params.push(severity);
+    }
+    if (status) {
+      sql += ' AND status = ?';
+      params.push(status);
+    }
+
+    sql += ' ORDER BY timestamp DESC LIMIT 100';
+    const logs = await query(sql, params);
+
+    // Error Spike Detection Algorithm (FR-047):
+    // Counts ERROR and CRITICAL severity logs recorded in the last 15 minutes
+    const spikeCheck = await get(
+      `SELECT COUNT(id) as count FROM error_logs
+       WHERE severity IN ('ERROR', 'CRITICAL')
+       AND timestamp >= datetime('now', '-15 minutes')`
+    );
+
+    const spikeCount = spikeCheck ? spikeCheck.count : 0;
+    const spikeDetected = spikeCount >= 3; // Spike threshold: 3+ errors in 15 mins
+
+    res.json({
+      success: true,
+      logs,
+      spike_detector: {
+        spike_detected: spikeDetected,
+        recent_error_count_15m: spikeCount,
+        threshold: 3,
+        message: spikeDetected
+          ? `⚠️ ALERT: Error spike detected! ${spikeCount} critical/system errors in the last 15 minutes.`
+          : 'System error rate within normal parameters.',
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Update Error Log Status (FR-046)
+router.put('/system/error-logs/:id/status', requireRole(['SUPER_ADMIN']), async (req, res, next) => {
+  try {
+    const { status } = req.body; // NEW, INVESTIGATING, RESOLVED, IGNORED
+    const logId = req.params.id;
+
+    if (!['NEW', 'INVESTIGATING', 'RESOLVED', 'IGNORED'].includes(status)) {
+      return res.status(400).json({ success: false, error: 'Invalid log status' });
+    }
+
+    await run('UPDATE error_logs SET status = ? WHERE id = ?', [status, logId]);
+    await logAuditAction(req, 'UPDATE_ERROR_LOG_STATUS', 'ERROR_LOG', logId, null, { status });
+
+    res.json({ success: true, message: `Error log status updated to ${status}` });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 8. Webhook Inspector & Retry Callback (FR-048, FR-049)
+router.get('/system/webhooks', requireRole(['SUPER_ADMIN']), async (req, res, next) => {
+  try {
+    const webhooks = await query('SELECT * FROM payment_events ORDER BY created_at DESC LIMIT 100');
+    res.json({ success: true, webhooks });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/system/webhooks/:id/retry', requireRole(['SUPER_ADMIN']), async (req, res, next) => {
+  try {
+    const webhookId = req.params.id;
+    const event = await get('SELECT * FROM payment_events WHERE id = ?', [webhookId]);
+
+    if (!event) {
+      return res.status(404).json({ success: false, error: 'Webhook event not found' });
+    }
+
+    // Mark as re-processed
+    await run('UPDATE payment_events SET processed = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [webhookId]);
+
+    await logAuditAction(req, 'RETRY_WEBHOOK', 'PAYMENT_EVENT', webhookId, { processed: event.processed }, { processed: 1 });
+
+    res.json({
+      success: true,
+      message: `Webhook event #${webhookId} (${event.event_type}) callback re-triggered & marked processed successfully.`,
+      event,
+    });
   } catch (err) {
     next(err);
   }

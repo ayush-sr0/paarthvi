@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { api } from '../services/api';
 import { BookOpen, Calendar, User, ArrowRight } from 'lucide-react';
 
 export const WellnessBlogPage = () => {
-  const articles = [
+  const [articles, setArticles] = useState([
     {
       id: 1,
       title: 'Understanding Kshirpak Vidhi: The Ancient Science of Herbal Hair Oils',
@@ -28,13 +29,33 @@ Traditional herbal hair oils like Maha Bhringraj Divine Hair Oil undergo a metic
       excerpt: 'Incorporate 5 simple Ayurvedic morning habits to maintain daily energy, mental clarity, and digestive ease.',
       content: `Dinacharya, or the Ayurvedic daily routine, aligns human circadian rhythms with nature’s cycles. Simple habits like warm water drinking, oil pulling (Gandusha), self-massage (Abhyanga), and mindfulness can rejuvenate your immune system.`,
     },
-  ];
+  ]);
 
   const [selectedArticle, setSelectedArticle] = useState(null);
 
+  useEffect(() => {
+    api.getBlogPosts().then(data => {
+      if (data.success && data.posts && data.posts.length > 0) {
+        setArticles(data.posts.map(p => ({
+          id: p.id,
+          title: p.title,
+          slug: p.slug,
+          category: p.category,
+          author: p.author,
+          date: p.publish_date,
+          cover: p.cover_image,
+          excerpt: p.excerpt,
+          content: p.content,
+        })));
+      }
+    });
+
+    api.trackEvent('PAGE_VIEW', '/wellness-knowledge');
+  }, []);
+
   return (
     <div className="max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop py-8 space-y-8">
-      
+
       <div className="border-b border-outline/10 pb-4">
         <span className="font-label text-xs uppercase tracking-widest text-gold-leaf font-bold block mb-1">
           Knowledge Base

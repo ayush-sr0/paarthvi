@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { api } from '../services/api';
 import { useCart } from '../context/CartContext';
+import { SEO } from '../components/SEO';
 import { Filter, SlidersHorizontal, Star, Heart, ArrowUpDown, X, Check } from 'lucide-react';
 
 export const ShopPage = () => {
@@ -17,8 +18,10 @@ export const ShopPage = () => {
   const selectedCategory = searchParams.get('category') || '';
   const selectedSort = searchParams.get('sort') || 'popular';
   const searchQuery = searchParams.get('search') || '';
+  const [minPrice, setMinPrice] = useState(searchParams.get('min_price') || '0');
   const [priceRange, setPriceRange] = useState(searchParams.get('max_price') || '3000');
   const [minRating, setMinRating] = useState(searchParams.get('rating') || '');
+  const [inStockOnly, setInStockOnly] = useState(searchParams.get('in_stock') === 'true');
 
   useEffect(() => {
     api.getCategories().then(data => {
@@ -32,16 +35,23 @@ export const ShopPage = () => {
     if (selectedCategory) params.category = selectedCategory;
     if (selectedSort) params.sort = selectedSort;
     if (searchQuery) params.search = searchQuery;
+    if (minPrice) params.min_price = minPrice;
     if (priceRange) params.max_price = priceRange;
     if (minRating) params.rating = minRating;
 
     api.getProducts(params).then(data => {
-      if (data.success) setProducts(data.products || []);
+      if (data.success) {
+        let items = data.products || [];
+        if (inStockOnly) {
+          items = items.filter(p => (p.total_stock || 50) > 0);
+        }
+        setProducts(items);
+      }
       setLoading(false);
     });
 
     api.trackEvent('PAGE_VIEW', '/shop', { category: selectedCategory, search: searchQuery });
-  }, [selectedCategory, selectedSort, searchQuery, priceRange, minRating]);
+  }, [selectedCategory, selectedSort, searchQuery, minPrice, priceRange, minRating, inStockOnly]);
 
   const handleCategorySelect = (slug) => {
     const newParams = new URLSearchParams(searchParams);
@@ -58,12 +68,18 @@ export const ShopPage = () => {
 
   const clearFilters = () => {
     setSearchParams(new URLSearchParams());
+    setMinPrice('0');
     setPriceRange('3000');
     setMinRating('');
+    setInStockOnly(false);
   };
 
   return (
     <div className="max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop py-8">
+      <SEO
+        title="Ayurvedic Formulations Catalogue — Parthvi Ayurveda"
+        description="Browse authentic Ayurvedic herbal remedies, Kshirpak oils, Himalayan Shilajit, and organic wellness supplements."
+      />
       
       {/* Header & Title */}
       <div className="mb-8 border-b border-outline/10 pb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">

@@ -2,6 +2,7 @@ import express from 'express';
 import Razorpay from 'razorpay';
 import { query, get, run } from '../db/database.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { getShippingProvider } from '../services/shippingService.js';
 
 const router = express.Router();
 
@@ -18,20 +19,103 @@ try {
   console.warn('Razorpay SDK initialized with test fallback key.');
 }
 
-// Check pincode serviceability
-router.get('/pincode/:pincode', (req, res) => {
-  const { pincode } = req.params;
-  const isServiceable = /^[1-9][0-9]{5}$/.test(pincode); // 6-digit Indian PIN check
-  const isCodAvailable = parseInt(pincode) % 2 === 0 || pincode.startsWith('2') || pincode.startsWith('1'); // Simulated COD pincodes
-
-  res.json({
-    success: true,
-    pincode,
-    serviceable: isServiceable,
-    estimated_days: isServiceable ? 3 : null,
-    cod_available: isServiceable ? isCodAvailable : false,
-  });
+// Check pincode serviceability (uses shipping provider abstraction)
+router.get('/pincode/:pincode', async (req, res) => {
+  try {
+    const provider = getShippingProvider();
+    const result = await provider.checkServiceability(req.params.pincode);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ success: false, error: 'Serviceability check failed' });
+  }
 });
+
+// Helper: Validate coupon with per-user limit enforcement (FR-034)
+const validateCoupon = async (couponCode, subtotal, userId) => {
+  if (!couponCode) return { discount_amount: 0, applied_coupon: null };
+
+  const coupon = await get(
+    `SELECT * FROM coupons WHERE UPPER(code) = UPPER(?) AND active = 1 AND (expiry_date IS NULL OR expiry_date >= CURRENT_DATE)`,
+    [couponCode]
+  );
+
+  if (!coupon) return { discount_amount: 0, applied_coupon: null, error: 'Invalid or expired coupon code' };
+
+  // Check start date
+  if (coupon.start_date && new Date(coupon.start_date) > new Date()) {
+    return { discount_amount: 0, applied_coupon: null, error: 'Coupon is not yet active' };
+  }
+
+  // Check minimum cart value
+  if (subtotal < coupon.min_cart_value) {
+    return { discount_amount: 0, applied_coupon: null, error: `Minimum order value of ₹${coupon.min_cart_value} required` };
+  }
+
+  // Check global usage limit
+  const globalUsage = await get('SELECT COUNT(id) as count FROM coupon_usages WHERE coupon_id = ?', [coupon.id]);
+  if (globalUsage.count >= coupon.usage_limit) {
+    return { discount_amount: 0, applied_coupon: null, error: 'Coupon usage limit reached' };
+  }
+
+  // Check per-user limit
+  if (userId) {
+    const userUsage = await get(
+      'SELECT COUNT(id) as count FROM coupon_usages WHERE coupon_id = ? AND user_id = ?',
+      [coupon.id, userId]
+    );
+    if (userUsage.count >= coupon.per_user_limit) {
+      return { discount_amount: 0, applied_coupon: null, error: `You have already used this coupon ${coupon.per_user_limit} time(s)` };
+    }
+  }
+
+  // Calculate discount
+  let discount_amount = 0;
+  if (coupon.discount_type === 'PERCENT') {
+    discount_amount = (subtotal * coupon.discount_value) / 100;
+    if (coupon.max_discount > 0) {
+      discount_amount = Math.min(discount_amount, coupon.max_discount);
+    }
+  } else if (coupon.discount_type === 'FLAT') {
+    discount_amount = Math.min(coupon.discount_value, subtotal);
+  }
+
+  return {
+    discount_amount,
+    applied_coupon: {
+      id: coupon.id,
+      code: coupon.code,
+      discount_type: coupon.discount_type,
+      discount_value: coupon.discount_value,
+      saved_amount: Math.round(discount_amount * 100) / 100,
+    },
+  };
+};
+
+// Helper: FEFO batch allocation (FR-028) — allocates stock from earliest-expiry batches
+const allocateFEFO = async (variantId, quantityNeeded) => {
+  const batches = await query(
+    `SELECT * FROM batches
+     WHERE variant_id = ? AND expiry_date > DATE('now') AND quantity > 0
+     ORDER BY expiry_date ASC`,
+    [variantId]
+  );
+
+  let remaining = quantityNeeded;
+  const allocations = [];
+
+  for (const batch of batches) {
+    if (remaining <= 0) break;
+
+    const take = Math.min(remaining, batch.quantity);
+    allocations.push({ batch_id: batch.id, batch_number: batch.batch_number, quantity: take });
+
+    // Deduct from batch
+    await run('UPDATE batches SET quantity = quantity - ? WHERE id = ?', [take, batch.id]);
+    remaining -= take;
+  }
+
+  return { allocated: quantityNeeded - remaining, remaining, allocations };
+};
 
 // Process Checkout & Initiate Order
 router.post('/initiate', authenticateToken, async (req, res, next) => {
@@ -52,6 +136,13 @@ router.post('/initiate', authenticateToken, async (req, res, next) => {
 
     if (!shipping_address || !shipping_address.street || !shipping_address.city || !shipping_address.pincode) {
       return res.status(400).json({ success: false, error: 'Complete delivery address is required' });
+    }
+
+    // Validate pincode serviceability via shipping provider
+    const provider = getShippingProvider();
+    const serviceCheck = await provider.checkServiceability(shipping_address.pincode);
+    if (!serviceCheck.serviceable) {
+      return res.status(400).json({ success: false, error: `Delivery not available to pincode ${shipping_address.pincode}` });
     }
 
     // 1. Validate items & inventory server-side
@@ -95,29 +186,22 @@ router.post('/initiate', authenticateToken, async (req, res, next) => {
       });
     }
 
-    // 2. Validate Coupon
-    let discount_amount = 0;
-    if (coupon_code) {
-      const coupon = await get(
-        `SELECT * FROM coupons WHERE UPPER(code) = UPPER(?) AND active = 1 AND (expiry_date IS NULL OR expiry_date >= CURRENT_DATE)`,
-        [coupon_code]
-      );
-
-      if (coupon && subtotal >= coupon.min_cart_value) {
-        if (coupon.discount_type === 'PERCENT') {
-          discount_amount = (subtotal * coupon.discount_value) / 100;
-          if (coupon.max_discount > 0) {
-            discount_amount = Math.min(discount_amount, coupon.max_discount);
-          }
-        } else if (coupon.discount_type === 'FLAT') {
-          discount_amount = Math.min(coupon.discount_value, subtotal);
-        }
-      }
+    // 2. Validate Coupon with per-user limit
+    const userId = req.user ? req.user.id : null;
+    const couponResult = await validateCoupon(coupon_code, subtotal, userId);
+    if (couponResult.error) {
+      return res.status(400).json({ success: false, error: couponResult.error });
     }
+    const discount_amount = couponResult.discount_amount;
 
     const discountedSubtotal = Math.max(0, subtotal - discount_amount);
     const tax_amount = Math.round(discountedSubtotal * 0.12 * 100) / 100;
-    const shipping_fee = discountedSubtotal >= 499 ? 0 : 50;
+
+    // Use shipping provider for rate
+    const totalWeight = validatedItems.reduce((acc, i) => acc + i.quantity * 250, 0); // approx 250g per item
+    const rateResult = await provider.getRate(shipping_address.pincode, totalWeight, payment_method === 'COD');
+    const shipping_fee = discountedSubtotal >= 499 ? 0 : (rateResult.success ? rateResult.shipping_fee : 50);
+
     const total_amount = Math.round((discountedSubtotal + tax_amount + shipping_fee) * 100) / 100;
 
     // 3. Order & Invoice Number Generation
@@ -126,12 +210,11 @@ router.post('/initiate', authenticateToken, async (req, res, next) => {
     const orderNumber = `ORD-${dateStr}-${randomSuffix}`;
     const invoiceNumber = `INV-${dateStr}-${randomSuffix}`;
 
-    const userId = req.user ? req.user.id : null;
     const customerEmail = req.user ? req.user.email : guest_email;
     const customerName = req.user ? req.user.name : guest_name;
     const customerPhone = req.user ? req.user.phone : guest_phone;
 
-    // 4. Reserve stock transactionally
+    // 4. Reserve stock transactionally + FEFO batch allocation
     for (const item of validatedItems) {
       await run(
         `UPDATE inventory
@@ -139,6 +222,13 @@ router.post('/initiate', authenticateToken, async (req, res, next) => {
          WHERE variant_id = ?`,
         [item.quantity, item.quantity, item.variant_id]
       );
+
+      // Attempt FEFO batch allocation (best-effort, non-blocking)
+      try {
+        await allocateFEFO(item.variant_id, item.quantity);
+      } catch (fefoErr) {
+        console.warn('FEFO batch allocation warning (non-critical):', fefoErr.message);
+      }
     }
 
     // 5. Create Order Record
@@ -190,6 +280,14 @@ router.post('/initiate', authenticateToken, async (req, res, next) => {
       );
     }
 
+    // 6. Record coupon usage (FR-034)
+    if (couponResult.applied_coupon) {
+      await run(
+        'INSERT INTO coupon_usages (coupon_id, user_id, order_id) VALUES (?, ?, ?)',
+        [couponResult.applied_coupon.id, userId, orderId]
+      );
+    }
+
     // Record Analytics Purchase / Checkout Event
     await run(
       `INSERT INTO analytics_events (event_name, session_id, user_id, page, order_id, metadata_json)
@@ -197,7 +295,7 @@ router.post('/initiate', authenticateToken, async (req, res, next) => {
       [userId, orderId, JSON.stringify({ amount: total_amount, method: payment_method })]
     );
 
-    // 6. Payment initiation (Razorpay vs COD)
+    // 7. Payment initiation (Razorpay vs COD)
     if (payment_method === 'RAZORPAY') {
       let rzpOrder = null;
       try {
@@ -239,7 +337,43 @@ router.post('/initiate', authenticateToken, async (req, res, next) => {
         amount: total_amount,
         status: 'CONFIRMED',
       });
+// POST /api/checkout/release-expired-reservations (FR-027)
+// Background worker releasing reserved stock for timed out pending payment orders (>15 mins)
+router.post('/release-expired-reservations', async (req, res, next) => {
+  try {
+    const expiredOrders = await query(
+      `SELECT o.id, o.order_number, oi.variant_id, oi.quantity
+       FROM orders o
+       JOIN order_items oi ON o.id = oi.order_id
+       WHERE o.status = 'PENDING'
+       AND o.payment_method = 'RAZORPAY'
+       AND o.created_at <= datetime('now', '-15 minutes')`
+    );
+
+    const releasedOrders = new Set();
+
+    for (const item of expiredOrders) {
+      await run(
+        `UPDATE inventory
+         SET available_stock = available_stock + ?, reserved_stock = MAX(0, reserved_stock - ?)
+         WHERE variant_id = ?`,
+        [item.quantity, item.quantity, item.variant_id]
+      );
+      releasedOrders.add(item.id);
     }
+
+    for (const orderId of releasedOrders) {
+      await run(
+        "UPDATE orders SET status = 'CANCELLED', payment_status = 'EXPIRED' WHERE id = ?",
+        [orderId]
+      );
+    }
+
+    res.json({
+      success: true,
+      released_orders_count: releasedOrders.size,
+      message: `Released inventory reservations for ${releasedOrders.size} expired pending orders.`,
+    });
   } catch (err) {
     next(err);
   }
