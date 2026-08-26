@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useToast } from '../context/ToastContext';
+import { api } from '../services/api';
 import { SEO } from '../components/SEO';
 import { Sparkles, CheckCircle, ArrowRight, RefreshCw, ShoppingBag, Leaf, Heart } from 'lucide-react';
 
@@ -9,6 +10,9 @@ export const DoshaQuizPage = () => {
   const navigate = useNavigate();
   const { addToCart } = useCart();
   const { showSuccess } = useToast();
+
+  const [recommendedProducts, setRecommendedProducts] = useState([]);
+  const [loadingRecs, setLoadingRecs] = useState(false);
 
   const questions = [
     {
@@ -62,6 +66,18 @@ export const DoshaQuizPage = () => {
   const [answers, setAnswers] = useState([]);
   const [quizResult, setQuizResult] = useState(null);
 
+  useEffect(() => {
+    if (quizResult?.dominant) {
+      setLoadingRecs(true);
+      api.getProducts({ dosha: quizResult.dominant }).then(data => {
+        setLoadingRecs(false);
+        if (data.success && data.products) {
+          setRecommendedProducts(data.products);
+        }
+      }).catch(() => setLoadingRecs(false));
+    }
+  }, [quizResult]);
+
   const handleSelectOption = (dosha) => {
     const updatedAnswers = [...answers, dosha];
     setAnswers(updatedAnswers);
@@ -95,7 +111,9 @@ export const DoshaQuizPage = () => {
     setCurrentQuestion(0);
     setAnswers([]);
     setQuizResult(null);
+    setRecommendedProducts([]);
   };
+
 
   // Formulation recommendations based on dominant dosha
   const getRecommendations = (dosha) => {
@@ -214,31 +232,53 @@ export const DoshaQuizPage = () => {
               Recommended Formulations for Your Constitution
             </h3>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {getRecommendations(quizResult.dominant).map((item, idx) => (
-                <div key={idx} className="bg-surface p-6 rounded-2xl border border-outline/20 space-y-3 shadow-sm flex flex-col justify-between">
-                  <div className="space-y-1">
-                    <span className="font-label text-[10px] font-bold uppercase text-gold-leaf">Targeted {quizResult.dominant} Remedy</span>
-                    <h4 className="font-display text-base font-bold text-primary">{item.name}</h4>
-                    <p className="font-body text-xs text-on-surface-variant leading-relaxed">{item.desc}</p>
-                  </div>
+            {loadingRecs ? (
+              <div className="text-center p-8 font-body text-xs text-on-surface-variant animate-pulse">
+                Fetching authentic formulations matching your {quizResult.dominant} profile...
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {recommendedProducts.map((prod) => (
+                  <div key={prod.id} className="bg-surface p-5 rounded-2xl border border-outline/20 space-y-3 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+                    <div className="flex gap-3">
+                      {prod.main_image && (
+                        <img src={prod.main_image} alt={prod.name} className="w-20 h-20 object-cover rounded-xl border border-outline/20 shrink-0" />
+                      )}
+                      <div className="space-y-1">
+                        <span className="font-label text-[10px] font-bold uppercase text-gold-leaf bg-gold-leaf/10 px-2 py-0.5 rounded">
+                          {prod.target_dosha || quizResult.dominant} Remedy
+                        </span>
+                        <Link to={`/product/${prod.slug}`} className="font-display text-base font-bold text-primary hover:text-gold-leaf block leading-tight">
+                          {prod.name}
+                        </Link>
+                        <p className="font-body text-xs text-on-surface-variant line-clamp-2">{prod.short_desc || prod.description}</p>
+                      </div>
+                    </div>
 
-                  <div className="pt-2 border-t border-outline/10 flex items-center justify-between">
-                    <span className="font-display text-base font-bold text-primary">₹{item.price}</span>
-                    <button
-                      onClick={() => {
-                        addToCart(item.variantId, 1);
-                        showSuccess(`Added ${item.name} to cart!`);
-                      }}
-                      className="bg-primary text-on-primary font-label text-xs uppercase font-bold px-4 py-2 rounded-full hover:bg-primary-container inline-flex items-center gap-1"
-                    >
-                      <ShoppingBag size={14} /> Add to Cart
-                    </button>
+                    <div className="pt-2 border-t border-outline/10 flex items-center justify-between">
+                      <div>
+                        <span className="font-display text-base font-bold text-primary">₹{prod.selling_price}</span>
+                        {prod.mrp && parseFloat(prod.mrp) > parseFloat(prod.selling_price) && (
+                          <span className="text-xs text-on-surface-variant line-through ml-2">₹{prod.mrp}</span>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => {
+                          const variantId = prod.default_variant_id || prod.id;
+                          addToCart(variantId, 1);
+                          showSuccess(`Added ${prod.name} to cart!`);
+                        }}
+                        className="bg-primary text-on-primary font-label text-xs uppercase font-bold px-4 py-2 rounded-full hover:bg-primary-container inline-flex items-center gap-1 transition-all"
+                      >
+                        <ShoppingBag size={14} /> Add to Cart
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
+
         </div>
       )}
     </div>

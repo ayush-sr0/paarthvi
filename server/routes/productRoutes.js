@@ -35,25 +35,34 @@ router.get('/categories', async (req, res, next) => {
 // GET products (PLP with filtering & sorting)
 router.get('/', async (req, res, next) => {
   try {
-    const { category, min_price, max_price, rating, is_featured, is_bestseller, sort, search } = req.query;
+    const { category, min_price, max_price, rating, is_featured, is_bestseller, dosha, sort, search } = req.query;
 
     let sql = `
       SELECT p.*, c.name as category_name, c.slug as category_slug,
              (SELECT image_url FROM product_images WHERE product_id = p.id ORDER BY display_order ASC LIMIT 1) as main_image,
+             (SELECT id FROM product_variants WHERE product_id = p.id LIMIT 1) as default_variant_id,
              (SELECT AVG(rating) FROM reviews WHERE product_id = p.id AND status = 'APPROVED') as avg_rating,
              (SELECT COUNT(id) FROM reviews WHERE product_id = p.id AND status = 'APPROVED') as review_count
       FROM products p
       JOIN categories c ON p.category_id = c.id
-      WHERE p.status = 'PUBLISHED'
+      WHERE (p.status = 'PUBLISHED' OR p.status IS NULL)
     `;
 
     const params = [];
     let paramIdx = 1;
 
+    if (dosha) {
+      const targetD = dosha.trim().toUpperCase();
+      sql += ` AND (p.target_dosha LIKE $${paramIdx} OR p.target_dosha = 'TRIDOSAHIC' OR p.target_dosha IS NULL)`;
+      params.push(`%${targetD}%`);
+      paramIdx++;
+    }
+
     if (category) {
       sql += ` AND c.slug = $${paramIdx++}`;
       params.push(category);
     }
+
 
     if (min_price) {
       sql += ` AND p.selling_price >= $${paramIdx++}`;
@@ -130,7 +139,7 @@ router.get('/search/suggest', async (req, res, next) => {
               (SELECT image_url FROM product_images WHERE product_id = p.id LIMIT 1) as main_image
        FROM products p
        JOIN categories c ON p.category_id = c.id
-       WHERE p.status = 'PUBLISHED' AND (LOWER(p.name) LIKE $1 OR LOWER(p.key_ingredients) LIKE $2)
+       WHERE (p.status = 'PUBLISHED' OR p.status IS NULL) AND (LOWER(p.name) LIKE $1 OR LOWER(p.key_ingredients) LIKE $2)
        LIMIT 6`,
       [`%${searchKey}%`, `%${searchKey}%`]
     );
@@ -157,7 +166,7 @@ router.get('/:slug', async (req, res, next) => {
       `SELECT p.*, c.name as category_name, c.slug as category_slug
        FROM products p
        JOIN categories c ON p.category_id = c.id
-       WHERE p.slug = $1 AND p.status = 'PUBLISHED'`,
+       WHERE p.slug = $1 AND (p.status = 'PUBLISHED' OR p.status IS NULL)`,
       [req.params.slug]
     );
 

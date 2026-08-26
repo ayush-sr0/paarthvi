@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams, Link, useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import { useCart } from '../context/CartContext';
 import { SEO } from '../components/SEO';
 import { Filter, SlidersHorizontal, Star, Heart, ArrowUpDown, X, Check } from 'lucide-react';
 
 export const ShopPage = () => {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { addToCart, toggleWishlist, wishlist } = useCart();
 
@@ -237,7 +238,8 @@ export const ShopPage = () => {
               {products.map((product) => (
                 <div
                   key={product.id}
-                  className="bg-surface rounded-xl overflow-hidden border border-outline/20 shadow-sm flex flex-col justify-between group glow-hover"
+                  onClick={() => navigate(`/product/${product.slug}`)}
+                  className="bg-surface rounded-xl overflow-hidden border border-outline/20 shadow-sm flex flex-col justify-between group glow-hover cursor-pointer"
                 >
                   {/* Product Image & Badges */}
                   <div className="relative h-60 overflow-hidden bg-surface-container-low">
@@ -261,7 +263,10 @@ export const ShopPage = () => {
 
                     {/* Wishlist Button */}
                     <button
-                      onClick={() => toggleWishlist(product.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleWishlist(product.id);
+                      }}
                       className={`absolute top-3 right-3 p-2 rounded-full backdrop-blur-sm transition-colors ${
                         wishlist.includes(product.id)
                           ? 'bg-gold-leaf text-white'
@@ -271,6 +276,7 @@ export const ShopPage = () => {
                       <Heart size={16} fill={wishlist.includes(product.id) ? 'currentColor' : 'none'} />
                     </button>
                   </div>
+
 
                   {/* Product Info */}
                   <div className="p-5 flex-1 flex flex-col justify-between">

@@ -87,12 +87,13 @@ router.get('/:id/invoice', authenticateToken, async (req, res, next) => {
 
     const storeInfo = {
       name: 'Parthvi Ayurveda (Parthvi Herbal Formulations Pvt Ltd)',
-      address: 'Plot 14, Industrial Estate, Haridwar, Uttarakhand - 249401',
+      address: 'Gaur City Center, Greater Noida, Uttar Pradesh - 201318',
       gstin: '05AAACP1234F1Z9',
       fssai_lic: '12621005000432',
       email: 'support@parthvi.com',
       phone: '+91 9876543210',
     };
+
 
     const invoiceData = {
       store_info: storeInfo,

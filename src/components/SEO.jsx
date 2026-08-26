@@ -7,7 +7,8 @@ import React, { useEffect } from 'react';
 export const SEO = ({
   title = 'Parthvi Ayurveda — Authentic Herbal Remedies & Modern Wellness',
   description = 'Discover sacred Ayurvedic formulations, Himalayan Shilajit, Kshirpak hair oils, and organic wellness rasayanas crafted to harmonize body, mind, and spirit.',
-  image = 'https://lh3.googleusercontent.com/aida-public/AB6AXuDkIoC79wqGR-6Vhm8oo35VT590u1_5XFguygcZr8AyxLW4VzQ5NVW5DMwpthxTb6vmn_kPPb2PEoRcLE60GmOsdsZsuYbjY15z_XvrPLQ_ieJxA3z3LlmtVq4UeQEFgUMmtuKBOBNOOWXExk1aPjCJZvaQCIy0WVxuKJh8W8X8d0sPj3jo5y2LzMD8bTuQUVPgp90TRBDqUtUnB99B90lDEXdQa_U38Btqy2vdqmDTenXyEJ5cQ08TWg',
+  image = '/products/chyawanprash.jpg',
+
   url = window.location.href,
   schema = null,
 }) => {

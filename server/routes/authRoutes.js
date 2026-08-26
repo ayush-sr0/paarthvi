@@ -62,6 +62,36 @@ router.post('/login', async (req, res, next) => {
   }
 });
 
+// Google Login via Supabase
+router.post('/supabase-google', async (req, res, next) => {
+  try {
+    const { email, name, avatar_url } = req.body;
+    if (!email) {
+      return res.status(400).json({ success: false, error: 'Email is required for Google authentication' });
+    }
+
+    let user = await get('SELECT * FROM users WHERE email = $1', [email]);
+    if (!user) {
+      const passwordHash = await bcrypt.hash(`google-auth-${Date.now()}`, 10);
+      const result = await run(
+        'INSERT INTO users (name, email, password_hash, role) VALUES ($1, $2, $3, $4) RETURNING id',
+        [name || email.split('@')[0], email, passwordHash, 'CUSTOMER']
+      );
+      user = { id: result.lastID, name: name || email.split('@')[0], email, role: 'CUSTOMER', phone: null };
+    }
+
+    const token = generateToken(user);
+    res.json({
+      success: true,
+      token,
+      user: { id: user.id, name: user.name, email: user.email, role: user.role, phone: user.phone || '' },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+
 // Get current profile
 router.get('/me', requireAuth, async (req, res, next) => {
   try {

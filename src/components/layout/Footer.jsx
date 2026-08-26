@@ -103,8 +103,9 @@ export const Footer = () => {
             <ul className="space-y-3 text-xs font-body opacity-90">
               <li className="flex items-start gap-2">
                 <MapPin size={16} className="text-gold-leaf shrink-0 mt-0.5" />
-                <span>Parthvi Herbal Formulations, Plot 14, Industrial Estate, Haridwar, Uttarakhand - 249401</span>
+                <span>Parthvi Herbal Formulations, Gaur City Center, Greater Noida, Uttar Pradesh - 201318</span>
               </li>
+
               <li className="flex items-center gap-2">
                 <Phone size={16} className="text-gold-leaf shrink-0" />
                 <span>+91 98765 43210 (Mon-Sat, 9AM - 6PM)</span>
@@ -126,12 +127,15 @@ export const Footer = () => {
         <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-xs font-body opacity-70">
           <p>© 2026 Parthvi Ayurveda. All rights reserved.</p>
           <div className="flex flex-wrap gap-4 font-label uppercase text-[10px]">
-            <button onClick={() => setActiveModal('privacy')} className="hover:underline">Privacy Policy</button>
+            <Link to="/privacy-policy" className="hover:underline">Privacy Policy</Link>
             <button onClick={() => setActiveModal('terms')} className="hover:underline">Terms of Service</button>
             <button onClick={() => setActiveModal('shipping')} className="hover:underline">Shipping Policy</button>
             <button onClick={() => setActiveModal('refund')} className="hover:underline">Refund Policy</button>
+            <Link to="/admin" className="hover:underline text-gold-leaf/80">Admin Portal</Link>
           </div>
+
         </div>
+
       </div>
 
       {/* Policy Modal Overlay */}

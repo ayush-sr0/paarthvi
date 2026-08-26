@@ -19,99 +19,101 @@ export const HomePage = () => {
   const defaultCategoryCards = [
     {
       id: 1,
-      name: 'Health Care',
-      slug: 'nutrition-supplements',
-      image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDCb-RgsboX1Akv4b04ivSLHtRXmvJaWjy3bY2LWsJdKDJLYuM1c4Eb9JmjPi651ISnd_zm2pkIbS2bCrZMZALwkwrrm2-QNoiEEB1StYgY8gLiBsPLYDvA2ev94ui-Cs8IW5KK7BkUdThLT8oxKyJiMLfoW9yah7VgFowHGDQFUvqYciLIM6V4Rglt7ezVGK-ZTLb4f4ZbDIz1ZKMzavGgkMsynkp4bVbl5fiD20NuX6YSeuht81QS7A'
+      name: 'Hair Care',
+      slug: 'hair-care',
+      image: '/products/hair-xl.jpg'
     },
     {
       id: 2,
-      name: 'Personal Care',
-      slug: 'personal-care',
-      image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCWnxnpE8wdajXKLcwiFWUz7B-5TiqapQwTxnY0kkPWSy6Mcj7aBjApOwyXwNKsbm_qFW_zeflpYfiOUEqhT4EY0ydhwp2zQjAGq8sHlboShIADMPV63mrMlqf9ht6AHyl74mMjPgnHumtRGFw-B3eTkVtmSFYXqokv6pkYAKwDsRfmA7A6-hQxlLRBOSdF1jV9PVj54mtdp_WDf-e4fa0MrcO0uhfVB9Q6VHeQXs3PaBr25eHXMzhxaw'
+      name: 'Nutrition & Supplements',
+      slug: 'nutrition-supplements',
+      image: '/products/gain-up.jpg'
     },
     {
       id: 3,
-      name: 'Medicine',
+      name: 'Herbal Wellness',
       slug: 'herbal-wellness',
-      image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBH33w-PXNVmO1ZqPjsi4EcEDwv-WvX7MVXdcCqmn9WgawL2C896vjmujbj6OeInFkgSPganzDbp44cgTdy5tTmGDkJ2_Q5OD1pPKAvguRBnKjRVAjBk8OsKgAFNayCRAc408HdhQ8Q_QiGyxCAttbVUIuwm5PKpljKzSd4keZW16OhOklcKazIWPhIlR5-P87vM3C3aMXBjNZc3mwNKY_4dWBp6rerIA8iqulhMxKE6jCb22vQ9pMTJg'
+      image: '/products/sukero.jpg'
     },
     {
       id: 4,
-      name: 'Nutraceuticals',
+      name: 'Daily Wellness',
       slug: 'daily-wellness',
-      image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAtBTO3te9frWis1VqUj7GWYnH-aAdC6ZBZ_42IOKfqa7KvQxcYVMVqqHA60fIy6NQClOJx0wBoKMO9lOxA_d93HGs_ITOMcx6nlwiD-tIffpBXhhbkYA8IP3DFOdFnkAiViZOXA3PAILKPFD9h8O1-3a1BA3tvpLtzTKhhJ5zw_9ZwUjn7q8N6ILI7tMlykM-dkGNKBHuDHbKDM8yvFEv2ugBH-MigsRU1d57XjW66K2uJ5bG9IA8hWA'
+      image: '/products/chyawanprash.jpg'
     },
     {
       id: 5,
-      name: 'Paridhan',
-      slug: 'mens-wellness',
-      image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCWnxnpE8wdajXKLcwiFWUz7B-5TiqapQwTxnY0kkPWSy6Mcj7aBjApOwyXwNKsbm_qFW_zeflpYfiOUEqhT4EY0ydhwp2zQjAGq8sHlboShIADMPV63mrMlqf9ht6AHyl74mMjPgnHumtRGFw-B3eTkVtmSFYXqokv6pkYAKwDsRfmA7A6-hQxlLRBOSdF1jV9PVj54mtdp_WDf-e4fa0MrcO0uhfVB9Q6VHeQXs3PaBr25eHXMzhxaw'
+      name: 'Personal Care',
+      slug: 'personal-care',
+      image: '/products/joint-support.jpg'
     },
     {
       id: 6,
-      name: 'Hawan Samagri',
-      slug: 'womens-wellness',
-      image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBTnRYq9N4tNYCBNHtwC-9UKO16ekI_k5V8PyYQl--a4OjeDqHIgZzu5t4Eso_fB3VPqTxe4zl4GxlTl9NXzlji4fR8bO-sKyU8hveO2fFbcP5L-fUT8uoa8xmoo61r_SMjrftYhm5_9tu85Vl7M48XEDWOAWiWm_5oOWo-GudwqC57ggpbLKdDg3y4Xo4CYKOklG1lgeFGD1xnWouleXxJcf-8eKrZbVAZyvWDlUSWt3lfkzdg1z_qOQ'
+      name: "Men's Wellness",
+      slug: 'mens-wellness',
+      image: '/products/shilajit-resin.jpg'
     }
   ];
+
 
   const defaultComboProducts = [
     {
       id: 101,
-      name: "Patanjali Nutrela Kid's Superfood Combo",
-      slug: "ashwagandha-root-powder",
-      net_qty: "580 g",
-      price: 849.00,
-      mrp: 899.00,
-      main_image: "https://lh3.googleusercontent.com/aida-public/AB6AXuDCb-RgsboX1Akv4b04ivSLHtRXmvJaWjy3bY2LWsJdKDJLYuM1c4Eb9JmjPi651ISnd_zm2pkIbS2bCrZMZALwkwrrm2-QNoiEEB1StYgY8gLiBsPLYDvA2ev94ui-Cs8IW5KK7BkUdThLT8oxKyJiMLfoW9yah7VgFowHGDQFUvqYciLIM6V4Rglt7ezVGK-ZTLb4f4ZbDIz1ZKMzavGgkMsynkp4bVbl5fiD20NuX6YSeuht81QS7A",
-      avg_rating: 4.8,
-      review_count: 14
+      name: "Paarthvi Chyawanprash Avaleha",
+      slug: "paarthvi-chyawanprash-avaleha",
+      net_qty: "500 g",
+      price: 449.00,
+      mrp: 599.00,
+      main_image: "/products/chyawanprash.jpg",
+      avg_rating: 4.9,
+      review_count: 28
     },
     {
       id: 102,
-      name: "Patanjali Nutrela Women's Superfood Combo",
-      slug: "kumkumadi-facial-oil",
-      net_qty: "580 g",
-      price: 733.00,
-      mrp: 799.00,
-      main_image: "https://lh3.googleusercontent.com/aida-public/AB6AXuBTnRYq9N4tNYCBNHtwC-9UKO16ekI_k5V8PyYQl--a4OjeDqHIgZzu5t4Eso_fB3VPqTxe4zl4GxlTl9NXzlji4fR8bO-sKyU8hveO2fFbcP5L-fUT8uoa8xmoo61r_SMjrftYhm5_9tu85Vl7M48XEDWOAWiWm_5oOWo-GudwqC57ggpbLKdDg3y4Xo4CYKOklG1lgeFGD1xnWouleXxJcf-8eKrZbVAZyvWDlUSWt3lfkzdg1z_qOQ",
-      avg_rating: 4.9,
-      review_count: 22
+      name: "Paarthvi Veda Shilajit Resin (75% Fulvic Acid)",
+      slug: "shilajit-resin-75-fulvic-acid",
+      net_qty: "20 g",
+      price: 999.00,
+      mrp: 1499.00,
+      main_image: "/products/shilajit-resin.jpg",
+      avg_rating: 5.0,
+      review_count: 34
     },
     {
       id: 103,
-      name: "Combo- Amla Hair Oil+Kesh Kanti...",
-      slug: "ashwagandha-root-powder",
-      net_qty: "650 g",
-      price: 258.50,
-      mrp: 275.00,
-      main_image: "https://lh3.googleusercontent.com/aida-public/AB6AXuAtBTO3te9frWis1VqUj7GWYnH-aAdC6ZBZ_42IOKfqa7KvQxcYVMVqqHA60fIy6NQClOJx0wBoKMO9lOxA_d93HGs_ITOMcx6nlwiD-tIffpBXhhbkYA8IP3DFOdFnkAiViZOXA3PAILKPFD9h8O1-3a1BA3tvpLtzTKhhJ5zw_9ZwUjn7q8N6ILI7tMlykM-dkGNKBHuDHbKDM8yvFEv2ugBH-MigsRU1d57XjW66K2uJ5bG9IA8hWA",
-      avg_rating: 4.7,
+      name: "Gain Up Lean Mass Gainer Powder",
+      slug: "gain-up-lean-mass-gainer",
+      net_qty: "500 g",
+      price: 999.00,
+      mrp: 1299.00,
+      main_image: "/products/gain-up.jpg",
+      avg_rating: 4.8,
       review_count: 19
     },
     {
       id: 104,
-      name: "Kesh Kanti Advance Herbal Hair...",
-      slug: "kumkumadi-facial-oil",
-      net_qty: "100 ml",
-      price: 356.00,
-      mrp: 399.00,
-      main_image: "https://lh3.googleusercontent.com/aida-public/AB6AXuCWnxnpE8wdajXKLcwiFWUz7B-5TiqapQwTxnY0kkPWSy6Mcj7aBjApOwyXwNKsbm_qFW_zeflpYfiOUEqhT4EY0ydhwp2zQjAGq8sHlboShIADMPV63mrMlqf9ht6AHyl74mMjPgnHumtRGFw-B3eTkVtmSFYXqokv6pkYAKwDsRfmA7A6-hQxlLRBOSdF1jV9PVj54mtdp_WDf-e4fa0MrcO0uhfVB9Q6VHeQXs3PaBr25eHXMzhxaw",
-      avg_rating: 5.0,
-      review_count: 31
+      name: "Sukero Capsules (Diabetes Management)",
+      slug: "sukero-diabetes-management",
+      net_qty: "60 Capsules",
+      price: 699.00,
+      mrp: 899.00,
+      main_image: "/products/sukero.jpg",
+      avg_rating: 4.9,
+      review_count: 25
     },
     {
       id: 105,
-      name: "Ashwagandha Nagori & Kesar Rasayana",
-      slug: "ashwagandha-root-powder",
-      net_qty: "250 g",
-      price: 499.00,
-      mrp: 599.00,
-      main_image: "https://lh3.googleusercontent.com/aida-public/AB6AXuBH33w-PXNVmO1ZqPjsi4EcEDwv-WvX7MVXdcCqmn9WgawL2C896vjmujbj6OeInFkgSPganzDbp44cgTdy5tTmGDkJ2_Q5OD1pPKAvguRBnKjRVAjBk8OsKgAFNayCRAc408HdhQ8Q_QiGyxCAttbVUIuwm5PKpljKzSd4keZW16OhOklcKazIWPhIlR5-P87vM3C3aMXBjNZc3mwNKY_4dWBp6rerIA8iqulhMxKE6jCb22vQ9pMTJg",
+      name: "Thyro Pro Capsules (Thyroid Management)",
+      slug: "thyro-pro-thyroid-management",
+      net_qty: "60 Capsules",
+      price: 749.00,
+      mrp: 999.00,
+      main_image: "/products/thyro-pro.jpg",
       avg_rating: 4.8,
-      review_count: 14
+      review_count: 16
     }
   ];
+
 
   const scrollCombos = (direction) => {
     if (comboScrollRef.current) {
@@ -122,20 +124,21 @@ export const HomePage = () => {
 
   const [banners, setBanners] = useState([
     {
-      title: 'Restore Balance with Sacred Ayurveda',
-      subtitle: 'Discover our premium collection of authentic herbal remedies crafted to harmonize your mind, body, and spirit.',
-      ctaText: 'Shop Now',
-      ctaUrl: '/shop',
-      desktopImage: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDkIoC79wqGR-6Vhm8oo35VT590u1_5XFguygcZr8AyxLW4VzQ5NVW5DMwpthxTb6vmn_kPPb2PEoRcLE60GmOsdsZsuYbjY15z_XvrPLQ_ieJxA3z3LlmtVq4UeQEFgUMmtuKBOBNOOWXExk1aPjCJZvaQCIy0WVxuKJh8W8X8d0sPj3jo5y2LzMD8bTuQUVPgp90TRBDqUtUnB99B90lDEXdQa_U38Btqy2vdqmDTenXyEJ5cQ08TWg',
+      title: 'Paarthvi Chyawanprash Avaleha',
+      subtitle: 'Classical 20+ Herbal Rasayana for Natural Immunity & Daily Vitality.',
+      ctaText: 'Shop Chyawanprash',
+      ctaUrl: '/product/paarthvi-chyawanprash-avaleha',
+      desktopImage: '/products/chyawanprash.jpg',
     },
     {
-      title: 'Pure Ingredients. Conscious Living.',
-      subtitle: 'Himalayan Shilajit, Kshirpak Hair Oils, & Kesar Rasayanas for daily vitality and holistic harmony.',
-      ctaText: 'View Best Sellers',
-      ctaUrl: '/shop?sort=bestseller',
-      desktopImage: 'https://images.unsplash.com/photo-1512290900673-0ff7656910be?auto=format&fit=crop&q=80&w=1600',
+      title: 'Pure Himalayan Shilajit Resin (75% Fulvic Acid)',
+      subtitle: 'Fortified with Ashwagandha & Gokshura for Peak Energy & Cellular Stamina.',
+      ctaText: 'Explore Shilajit Resin',
+      ctaUrl: '/product/shilajit-resin-75-fulvic-acid',
+      desktopImage: '/products/shilajit-resin.jpg',
     },
   ]);
+
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -248,14 +251,28 @@ export const HomePage = () => {
         </div>
       </section>
 
-      {/* Category Quick Access Grid (Clean Neutral Surface, No Green Tint) */}
+      {/* Category Quick Access Grid */}
       <section className="px-margin-mobile md:px-margin-desktop py-2">
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 sm:gap-4">
           {(categories.length > 0 ? categories : defaultCategoryCards).slice(0, 6).map((cat, idx) => {
             const defaultMatch = defaultCategoryCards[idx % defaultCategoryCards.length];
-            const title = cat.name || defaultMatch.name;
+            const rawTitle = cat.name || defaultMatch.name;
             const image = cat.image || cat.main_image || defaultMatch.image;
             const slug = cat.slug || defaultMatch.slug;
+
+            const shortTitleMap = {
+              'Hair Care': 'Hair Care',
+              'Nutrition & Supplements': 'Nutrition',
+              'Herbal Wellness': 'Herbal Care',
+              'Daily Wellness': 'Daily Health',
+              'Personal Care': 'Personal Care',
+              "Men's Wellness": "Men's Health",
+              "Women's Wellness": "Women's Care",
+              'Health Care': 'Health Care',
+              'Medicine': 'Medicine',
+              'Nutraceuticals': 'Nutraceuticals'
+            };
+            const displayTitle = shortTitleMap[rawTitle] || rawTitle;
 
             return (
               <Link
@@ -263,24 +280,25 @@ export const HomePage = () => {
                 to={`/shop?category=${slug}`}
                 className="bg-white hover:bg-slate-50 border border-slate-200/80 rounded-2xl p-3 flex flex-col items-center justify-between text-center group transition-all duration-300 shadow-sm hover:shadow-md"
               >
-                <div className="w-full aspect-square max-w-[110px] rounded-xl overflow-hidden mb-2.5 p-2 flex items-center justify-center bg-slate-50/70 border border-slate-100">
+                <div className="w-full aspect-square max-w-[110px] rounded-xl overflow-hidden mb-2 flex items-center justify-center border border-slate-100 shadow-inner">
                   <img
                     src={image}
-                    alt={title}
-                    className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
+                    alt={displayTitle}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     onError={(e) => {
                       e.target.src = defaultMatch.image;
                     }}
                   />
                 </div>
-                <span className="font-display font-bold text-xs sm:text-sm text-[#00A651] group-hover:text-emerald-800 line-clamp-1 leading-tight">
-                  {title}
+                <span className="font-display font-bold text-xs sm:text-sm text-[#00A651] group-hover:text-emerald-800 tracking-tight leading-tight whitespace-nowrap">
+                  {displayTitle}
                 </span>
               </Link>
             );
           })}
         </div>
       </section>
+
 
       {/* Save on Combo Orders Product Carousel (Reference Image 2) */}
       <section className="px-margin-mobile md:px-margin-desktop py-4">
@@ -322,12 +340,14 @@ export const HomePage = () => {
             return (
               <div
                 key={product.id}
-                className="w-[240px] sm:w-[270px] flex-shrink-0 bg-white rounded-2xl p-4 border border-slate-100 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group"
+                onClick={() => navigate(`/product/${product.slug}`)}
+                className="w-[240px] sm:w-[270px] flex-shrink-0 bg-white rounded-2xl p-4 border border-slate-100 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group cursor-pointer"
               >
                 <div>
                   <div className="relative bg-[#F6F8F5] rounded-xl p-3 h-48 flex items-center justify-center mb-3 group-hover:bg-[#F0F4EF] transition-colors">
                     <button
                       onClick={(e) => {
+                        e.stopPropagation();
                         e.preventDefault();
                         toggleWishlist(product.id);
                       }}
@@ -380,7 +400,10 @@ export const HomePage = () => {
                 </div>
 
                 <button
-                  onClick={() => addToCart(product.default_variant_id || product.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    addToCart(product.default_variant_id || product.id);
+                  }}
                   className="w-full bg-[#00A651] hover:bg-[#008c44] text-white font-label font-bold text-xs py-2.5 rounded-full transition-colors flex items-center justify-center gap-1.5 shadow-sm mt-1 cursor-pointer"
                 >
                   Add to Cart
@@ -410,7 +433,8 @@ export const HomePage = () => {
           {bestSellers.slice(0, 4).map((product) => (
             <div
               key={product.id}
-              className="bg-surface rounded-xl overflow-hidden border border-outline/20 shadow-sm flex flex-col justify-between group glow-hover"
+              onClick={() => navigate(`/product/${product.slug}`)}
+              className="bg-surface rounded-xl overflow-hidden border border-outline/20 shadow-sm flex flex-col justify-between group glow-hover cursor-pointer"
             >
               <div className="relative h-60 overflow-hidden bg-surface-container-low">
                 <img
@@ -432,7 +456,10 @@ export const HomePage = () => {
                 </div>
 
                 <button
-                  onClick={() => toggleWishlist(product.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleWishlist(product.id);
+                  }}
                   className={`absolute top-3 right-3 p-2 rounded-full backdrop-blur-sm transition-colors ${
                     wishlist.includes(product.id)
                       ? 'bg-gold-leaf text-white'
@@ -495,7 +522,7 @@ export const HomePage = () => {
           <div
             className="absolute inset-0 bg-cover bg-center transition-transform duration-1000 group-hover:scale-105"
             style={{
-              backgroundImage: `url('https://lh3.googleusercontent.com/aida-public/AB6AXuD_gUEvKP2UO1InWig03CSZ6bg_KjrOERTishrMoNRrBFoSzl-n4WPg9c53FgM1QWvZQM6s62YypoCXFhrAvaVk9S8I_NrpvE7XdMxIcBQT6LbCZREURsnUIwYdwWqrlFQBXDKKUEyZNI5Z2nH-QP2FYTWSdB0SQXvOazIwMcrTJydeVSRhhF45C6bRNZqY62QCqxP0L78DOGDn8YJqbAIBP_E8NZfgJ01x4rgxcCMK29LO8CTHUn_abA')`,
+              backgroundImage: `url('/products/chyawanprash.jpg')`,
             }}
           ></div>
           <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center p-6 text-center group-hover:bg-black/50 transition-colors">
@@ -512,7 +539,7 @@ export const HomePage = () => {
         </div>
       </section>
 
-      {/* Wellness Wisdom Highlights (Reference code.html) */}
+      {/* Wellness Wisdom Highlights */}
       <section className="px-margin-mobile md:px-margin-desktop bg-surface-container-low py-12 border-y border-outline/10">
         <div className="text-center mb-10">
           <h2 className="font-display text-3xl text-primary mb-3 font-bold">Wellness Wisdom</h2>
@@ -525,19 +552,19 @@ export const HomePage = () => {
           <article className="bg-surface rounded-xl overflow-hidden shadow-sm border border-outline/10 hover:shadow-md transition-shadow group">
             <div className="h-48 overflow-hidden">
               <img
-                alt="Meditation"
+                alt="Sukero Diabetes Management"
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuDVotFW5CynC3Rp_CzdRGfSKdlD2J5BAtONdQYZfBCCwr5nF4wnRWK0IFVAGIb0nQSMtpqddh9IOzkwoMhQg20BHszA522FFxblkh_y5VEzYv7leKTl5tJ6tFjxS2mENoftk-pELG2s5018cre3o7lGQ2hg_dkz00kxjLtuf6OTSPeS7L_KQ_zcpyzXYpYBUBsCR4fT7bYWijm0LlzcPeMgqbEHx-iVo8sTLZ0nr4bDMzBsiTE8GkZLRQ"
+                src="/products/sukero.jpg"
               />
             </div>
             <div className="p-6 space-y-2">
-              <span className="text-[10px] font-label uppercase text-secondary font-bold block">Mind & Spirit</span>
-              <h3 className="font-display text-lg font-bold text-on-surface">Aligning Your Chakras for Autumn</h3>
+              <span className="text-[10px] font-label uppercase text-secondary font-bold block">Metabolic Care</span>
+              <h3 className="font-display text-lg font-bold text-on-surface">Managing Blood Sugar Naturally</h3>
               <p className="font-body text-xs text-on-surface-variant line-clamp-2">
-                As the seasons change, our internal energies shift. Learn simple daily practices to maintain balance.
+                How Sukero's synergy of Jamun, Gurmar, and Vijaysar aids insulin response and metabolic wellness.
               </p>
-              <Link to="/wellness-knowledge" className="text-primary font-label font-bold text-xs uppercase tracking-wider inline-flex items-center gap-1 group-hover:text-gold-leaf transition-colors pt-2">
-                Read More <ArrowRight size={14} />
+              <Link to="/product/sukero-diabetes-management" className="text-primary font-label font-bold text-xs uppercase tracking-wider inline-flex items-center gap-1 group-hover:text-gold-leaf transition-colors pt-2">
+                Read Formulation Details <ArrowRight size={14} />
               </Link>
             </div>
           </article>
@@ -545,19 +572,19 @@ export const HomePage = () => {
           <article className="bg-surface rounded-xl overflow-hidden shadow-sm border border-outline/10 hover:shadow-md transition-shadow group">
             <div className="h-48 overflow-hidden">
               <img
-                alt="Herbal Tea"
+                alt="Gain Up Lean Mass Gainer"
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuD1JVwkFejMCQIB5aWtSkrtZ8mSV0vT-mdsjKGehrHACWQt9kh2ldu1jqp4ZE3b68rQ7gXRCjBmeipSaf25AD8ZIpGNQ9KnTifd479gAX6a5ogWJCY2BVkfBnxiAVsdIOwX9ycDfPUYO3wTc9zRCcVLCE9HsgMKKf4zPiDqklSaMxl_RlsDl2DwNa8eSIrrRcVCwb5qOaL42NMDo1pVqs0WV2UA9mNHFkUd_LxcAZ0x17tEX_LdZxePLQ"
+                src="/products/gain-up.jpg"
               />
             </div>
             <div className="p-6 space-y-2">
               <span className="text-[10px] font-label uppercase text-secondary font-bold block">Nutrition</span>
-              <h3 className="font-display text-lg font-bold text-on-surface">The Golden Power of Turmeric</h3>
+              <h3 className="font-display text-lg font-bold text-on-surface">Herbal Mass & Muscle Building</h3>
               <p className="font-body text-xs text-on-surface-variant line-clamp-2">
-                Beyond curries, turmeric is a powerhouse of anti-inflammatory properties central to Ayurvedic healing.
+                Combine Ashwagandha and Shatavari for clean muscle tissue growth and stamina without synthetic fillers.
               </p>
-              <Link to="/wellness-knowledge" className="text-primary font-label font-bold text-xs uppercase tracking-wider inline-flex items-center gap-1 group-hover:text-gold-leaf transition-colors pt-2">
-                Read More <ArrowRight size={14} />
+              <Link to="/product/gain-up-lean-mass-gainer" className="text-primary font-label font-bold text-xs uppercase tracking-wider inline-flex items-center gap-1 group-hover:text-gold-leaf transition-colors pt-2">
+                Read Formulation Details <ArrowRight size={14} />
               </Link>
             </div>
           </article>
@@ -565,56 +592,58 @@ export const HomePage = () => {
           <article className="bg-surface rounded-xl overflow-hidden shadow-sm border border-outline/10 hover:shadow-md transition-shadow group hidden md:block">
             <div className="h-48 overflow-hidden">
               <img
-                alt="Yoga"
+                alt="Hair XL Hair Growth"
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuANTkE0W2RhvLFM7OrKJ3P-3nOiju22M60OxKF0nZ0uAVcpQE8QJUi18iH2DpDe7xdpzlPSMTx-FWvAfxTp1Nus1TfitsMNxoKIA0hUOGiS-7NDUmzUDfYFP7FIHSRKTZYM5a2VcX7pkVGQlVaMzuHvFAXrykjJcivgD1mBV7mv7xS8OFpBC4mJXR89Qr47H3a8GKRMsu5lhg8JWZQS9PMCG9YH_C3oaKRW8vxw7jN2RmeQcRbGILOuVg"
+                src="/products/hair-xl.jpg"
               />
             </div>
             <div className="p-6 space-y-2">
-              <span className="text-[10px] font-label uppercase text-secondary font-bold block">Lifestyle</span>
-              <h3 className="font-display text-lg font-bold text-on-surface">Morning Dinacharya Routine</h3>
+              <span className="text-[10px] font-label uppercase text-secondary font-bold block">Hair XL</span>
+              <h3 className="font-display text-lg font-bold text-on-surface">Revitalizing Scalp & Hair Follicles</h3>
               <p className="font-body text-xs text-on-surface-variant line-clamp-2">
-                Start your day aligned with the sun. A guide to the traditional Ayurvedic morning routine.
+                Bhringraj, Neem, and Curry Leaves work at the root to stop hair fall and trigger healthy growth.
               </p>
-              <Link to="/wellness-knowledge" className="text-primary font-label font-bold text-xs uppercase tracking-wider inline-flex items-center gap-1 group-hover:text-gold-leaf transition-colors pt-2">
-                Read More <ArrowRight size={14} />
+              <Link to="/product/hair-xl-supports-healthy-hair" className="text-primary font-label font-bold text-xs uppercase tracking-wider inline-flex items-center gap-1 group-hover:text-gold-leaf transition-colors pt-2">
+                Read Formulation Details <ArrowRight size={14} />
               </Link>
             </div>
           </article>
         </div>
       </section>
 
-      {/* Social Sanctuary / Community Grid (Reference code.html) */}
+      {/* Social Sanctuary / Community Grid */}
       <section className="px-margin-mobile md:px-margin-desktop py-4">
         <div className="text-center mb-8">
-          <h2 className="font-display text-2xl font-bold text-on-background mb-1">Our Community</h2>
+          <h2 className="font-display text-2xl font-bold text-on-background mb-1">Our Formulation Gallery</h2>
           <p className="font-body text-xs text-on-surface-variant">
-            Join our sanctuary on <span className="text-primary font-bold">@ParthviAyurveda</span>
+            Authentic product range crafted by <span className="text-primary font-bold">@ParthviAyurveda</span>
           </p>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
           {[
-            'https://lh3.googleusercontent.com/aida-public/AB6AXuBBmjY3ttD1mSv3AfCN1uMHSpL2S7D2fdLMTJ5hsCqQ1Vdz15SKBRojQf1a_10F-8sm2-PZEewlwiZasvgSL0kjCmRya8Ufe4mbl0WzImb-kwLfi9hUWgvtngLRak7mxSW8Uv4pYYu0WYr68617VfeLWjWmQlrJ3_UG2oJ0ei2VQdAt4--nQdg3-8CgzaEinZ1RztDjRVzRgnne2oVLSPGYCBE50rN-_v8V4Y13YxHhYwOpOmAjk221Fw',
-            'https://lh3.googleusercontent.com/aida-public/AB6AXuDrFPYJxewnSGFkjpaP3aYlHcgmDpX2KiBcs_NrUKDYvF39hUHI_k02F6IRmhQqg-Pnsu8bc1q6BHW-lvbjjim1KTaeFZSmXbp4Kgc7TRxLbIfQ44yji8USGGwk0yKKzCnzYKTlDxGokuSKgaegixf87ABBssbGoLJATLm4x8MsRKXzm11kFlr3_kDOboYJioXiwKhC7vl1dhHexrLtZEdsjHpEeCcNQMlP_w5gPffg5n8_1blPpt9uzg',
-            'https://lh3.googleusercontent.com/aida-public/AB6AXuCXFWrvLC-oObeB0r56lyWOHFSvl7KJl4H0EDrALuIDJwir3qpdkQUB2jbHCMY45hs4LufigOuqbqNaFTINwN8Xoy3UEivzj2g9xm5vmFs-Db_nTfNrYT9NdkaNlR9EAm-1rIo0o20rfFQDnGoe5K8q-8NNAhmrI_toGM0CVpIeo525jiVZIsMnGJ8yb1cMOpkj_YUnDsTlBbNACBdWY_z4bF7SQ0Ry5DAm4KrcXcjOkdQBWD_Qz5hiDw',
-            'https://lh3.googleusercontent.com/aida-public/AB6AXuD5edmXfZH308Tm5FwrAepW2CLrpM4tDzm7Xvg6K5wk09Me3H5Y-jqXi9Fahyd9AKXFpeXqYvgBODy42QeRQ1EZ7XTbH8jRcQXLb4RNe_cG-9w0anDmODTTZCBnEL7K9AVJPGSaIA71d-blA-AUoiA-pRh3BdkmyDKiTIDTl--kk5ZpCDZaaig_F_YRSMf0rI1v_s2wcEueBflyLumrOYFVokv9xWoGywCAUTNSHmFKK86vwjvE7snIvA',
-          ].map((imgUrl, idx) => (
-            <div key={idx} className="block relative aspect-square overflow-hidden group rounded-lg">
+            { img: '/products/chyawanprash.jpg', slug: 'paarthvi-chyawanprash-avaleha' },
+            { img: '/products/shilajit-resin.jpg', slug: 'shilajit-resin-75-fulvic-acid' },
+            { img: '/products/hair-xl.jpg', slug: 'hair-xl-supports-healthy-hair' },
+            { img: '/products/thyro-pro.jpg', slug: 'thyro-pro-thyroid-management' },
+          ].map((item, idx) => (
+            <Link key={idx} to={`/product/${item.slug}`} className="block relative aspect-square overflow-hidden group rounded-lg border border-outline/20">
               <img
-                src={imgUrl}
-                alt="Community Post"
+                src={item.img}
+                alt="Product Showcase"
                 className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
               />
               <div className="absolute inset-0 bg-primary/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-300">
-                <Heart className="text-white" size={28} fill="currentColor" />
+                <ShoppingBag className="text-white" size={28} />
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       </section>
 
+
       {/* SEO & Brand Mission Statement (Reference code.html) */}
+
       <section className="px-margin-mobile md:px-margin-desktop py-12 text-center max-w-4xl mx-auto">
         <div className="w-12 h-1 bg-gold-leaf mx-auto mb-6 rounded-full"></div>
         <h2 className="font-display text-2xl md:text-3xl text-primary mb-4 font-bold">

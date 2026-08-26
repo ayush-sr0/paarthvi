@@ -16,6 +16,7 @@ import { AccountPage } from './pages/AccountPage';
 import { WellnessBlogPage } from './pages/WellnessBlogPage';
 import { DoshaQuizPage } from './pages/DoshaQuizPage';
 import { AdminDashboardPage } from './pages/AdminDashboardPage';
+import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
 
 export function App() {
   return (
@@ -36,8 +37,10 @@ export function App() {
                   <Route path="/wellness-knowledge" element={<WellnessBlogPage />} />
                   <Route path="/dosha-quiz" element={<DoshaQuizPage />} />
                   <Route path="/admin" element={<AdminDashboardPage />} />
+                  <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
                 </Routes>
               </main>
+
               <Footer />
               <CartDrawer />
             </div>

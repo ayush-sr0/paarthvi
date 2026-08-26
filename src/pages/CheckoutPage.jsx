@@ -85,7 +85,8 @@ export const CheckoutPage = () => {
           currency: 'INR',
           name: 'Parthvi Ayurveda',
           description: `Payment for Order ${res.order_number}`,
-          image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBMDB18jmDxNqhcbJ5rGo40GeIy1Q2PWOvIbD2vmiGS3obaoRFn19c0GFctAHNhHHNdh4eAqSJUlMKzseGBR-6GO6i5RTU5CmKUGV3iojaIkagsplDbIM4didRqEVaMldcDrZQNOJ0ffkIsexfRoAJWh7443cfutWu3jK1ZFykxBoz28lLwmWISPC6a5yOcqEY3C_9piCdk4HaZPeTIwYEWzdWARcTAalDwKHyIOLrntXN-Gvp5zCSRYw',
+          image: '/products/chyawanprash.jpg',
+
           order_id: res.razorpay_order_id,
           handler: async function (response) {
             // Verify payment
@@ -201,8 +202,9 @@ export const CheckoutPage = () => {
             Thank You for Your Order!
           </h1>
           <p className="font-body text-xs text-on-surface-variant max-w-md mx-auto">
-            Your order <span className="font-bold text-primary">{placedOrder.order_number}</span> has been confirmed and sent to our herbal processing unit in Haridwar.
+            Your order <span className="font-bold text-primary">{placedOrder.order_number}</span> has been confirmed and sent to our herbal processing unit in Greater Noida.
           </p>
+
         </div>
 
         {/* GST Invoice Details Card */}

@@ -25,6 +25,16 @@ export const api = {
     return res.json();
   },
 
+  async syncGoogleUser(email, name, avatar_url) {
+    const res = await fetch(`${API_BASE}/auth/supabase-google`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, name, avatar_url }),
+    });
+    return res.json();
+  },
+
+
   async getMe() {
     const res = await fetch(`${API_BASE}/auth/me`, {
       headers: getAuthHeaders(),
@@ -76,24 +86,44 @@ export const api = {
 
   // Products & Search
   async getCategories() {
-    const res = await fetch(`${API_BASE}/products/categories`);
-    return res.json();
+    try {
+      const res = await fetch(`${API_BASE}/products/categories`);
+      if (!res.ok) return { success: false, categories: [] };
+      return await res.json();
+    } catch (err) {
+      return { success: false, categories: [] };
+    }
   },
 
   async getProducts(params = {}) {
-    const query = new URLSearchParams(params).toString();
-    const res = await fetch(`${API_BASE}/products?${query}`);
-    return res.json();
+    try {
+      const query = new URLSearchParams(params).toString();
+      const res = await fetch(`${API_BASE}/products?${query}`);
+      if (!res.ok) return { success: false, products: [] };
+      return await res.json();
+    } catch (err) {
+      return { success: false, products: [] };
+    }
   },
 
   async getProductBySlug(slug) {
-    const res = await fetch(`${API_BASE}/products/${slug}`);
-    return res.json();
+    try {
+      const res = await fetch(`${API_BASE}/products/${slug}`);
+      if (!res.ok) return { success: false, product: null };
+      return await res.json();
+    } catch (err) {
+      return { success: false, product: null };
+    }
   },
 
   async searchSuggest(q, sessionId) {
-    const res = await fetch(`${API_BASE}/products/search/suggest?q=${encodeURIComponent(q)}&session_id=${sessionId}`);
-    return res.json();
+    try {
+      const res = await fetch(`${API_BASE}/products/search/suggest?q=${encodeURIComponent(q)}&session_id=${sessionId}`);
+      if (!res.ok) return { success: false, suggestions: [] };
+      return await res.json();
+    } catch (err) {
+      return { success: false, suggestions: [] };
+    }
   },
 
   // Cart & Checkout
@@ -230,6 +260,16 @@ export const api = {
     });
     return res.json();
   },
+
+  async uploadImage(imageData, filename) {
+    const res = await fetch(`${API_BASE}/admin/upload`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify({ image: imageData, filename }),
+    });
+    return res.json();
+  },
+
 
   async deleteProductImage(productId, imageId) {
     const res = await fetch(`${API_BASE}/admin/products/${productId}/images/${imageId}`, {
@@ -442,8 +482,13 @@ export const api = {
 
   // CMS Banners APIs
   async getCmsBanners() {
-    const res = await fetch(`${API_BASE}/cms/banners`);
-    return res.json();
+    try {
+      const res = await fetch(`${API_BASE}/cms/banners`);
+      if (!res.ok) return { success: false, banners: [] };
+      return await res.json();
+    } catch (err) {
+      return { success: false, banners: [] };
+    }
   },
 
   async getAdminBanners() {

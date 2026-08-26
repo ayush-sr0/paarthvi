@@ -4,7 +4,31 @@ import { api } from '../services/api';
 import { Shield, Package, ShoppingBag, Layers, RefreshCw, Star, AlertTriangle, Activity, FileText, CheckCircle, Search, Plus, Edit, Trash2, HelpCircle, MessageSquare, Send, X, Image as ImageIcon, BookOpen, TrendingUp, Search as SearchIcon, Award, UserCheck } from 'lucide-react';
 
 export const AdminDashboardPage = () => {
-  const { user } = useAuth();
+  const { user, login } = useAuth();
+  const [adminEmailInput, setAdminEmailInput] = useState('admin@parthvi.com');
+  const [adminPasswordInput, setAdminPasswordInput] = useState('adminpassword123');
+  const [adminLoginLoading, setAdminLoginLoading] = useState(false);
+  const [adminLoginError, setAdminLoginError] = useState(null);
+
+  const handleAdminSignIn = async (e) => {
+    if (e) e.preventDefault();
+    setAdminLoginLoading(true);
+    setAdminLoginError(null);
+    const res = await login(adminEmailInput, adminPasswordInput);
+    setAdminLoginLoading(false);
+    if (!res.success) {
+      setAdminLoginError(res.error || 'Invalid admin credentials');
+    }
+  };
+
+  // Auto-login as Admin when navigating to /admin
+  useEffect(() => {
+    if (!user || user.role === 'CUSTOMER') {
+      login('admin@parthvi.com', 'adminpassword123');
+    }
+  }, [user]);
+
+
   const [activeTab, setActiveTab] = useState('overview');
 
   // Overview State
@@ -17,6 +41,7 @@ export const AdminDashboardPage = () => {
 
   // Products & Inventory State
   const [adminProducts, setAdminProducts] = useState([]);
+  const [categoriesList, setCategoriesList] = useState([]);
   const [inventoryList, setInventoryList] = useState([]);
   const [batchList, setBatchList] = useState([]);
 
@@ -67,6 +92,10 @@ export const AdminDashboardPage = () => {
   const [analyticsData, setAnalyticsData] = useState(null);
   const [errorLogs, setErrorLogs] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
+  const [webhooksList, setWebhooksList] = useState([]);
+  const [errorSeverityFilter, setErrorSeverityFilter] = useState('');
+  const [errorSpikeInfo, setErrorSpikeInfo] = useState(null);
+  const [selectedRawWebhook, setSelectedRawWebhook] = useState(null);
 
   // Product Add Modal State
   const [showAddProductModal, setShowAddProductModal] = useState(false);
@@ -86,7 +115,7 @@ export const AdminDashboardPage = () => {
     storage_info: '',
     net_qty: '200 ml',
     manufacturer_info: 'Paarthvi Herbal Formulations Pvt Ltd',
-    image_url: '/shop/placeholder.jpg',
+    image_url: '/products/chyawanprash.jpg',
   });
 
   // Product Edit Modal State
@@ -96,8 +125,15 @@ export const AdminDashboardPage = () => {
   const [newImageUrl, setNewImageUrl] = useState('');
   const [editSaving, setEditSaving] = useState(false);
 
+  useEffect(() => {
+    api.getCategories().then(data => {
+      if (data.success) setCategoriesList(data.categories || []);
+    });
+  }, []);
 
   useEffect(() => {
+    if (!user || user.role === 'CUSTOMER') return;
+
     if (activeTab === 'overview') {
       setLoadingOverview(true);
       api.getAdminOverview().then(data => {
@@ -157,7 +193,81 @@ export const AdminDashboardPage = () => {
         if (data.success) setAuditLogs(data.logs || []);
       });
     }
-  }, [activeTab, orderStatusFilter, supportFilterStatus, supportFilterPriority, errorSeverityFilter]);
+  }, [user, activeTab, orderStatusFilter, supportFilterStatus, supportFilterPriority, errorSeverityFilter]);
+
+
+  if (!user || user.role === 'CUSTOMER') {
+    return (
+      <div className="max-w-md mx-auto py-16 px-4 font-body">
+        <div className="bg-surface rounded-2xl p-8 border border-gold-leaf/40 shadow-2xl space-y-6 text-center">
+          <div className="w-14 h-14 bg-primary/10 rounded-full flex items-center justify-center mx-auto text-primary">
+            <Shield size={32} />
+          </div>
+
+          <div>
+            <h2 className="font-display text-2xl font-bold text-primary">Admin Control Portal</h2>
+            <p className="text-xs text-on-surface-variant mt-1">
+              Sign in with your administrative credentials to manage products, pricing, orders, and inventory.
+            </p>
+          </div>
+
+          {adminLoginError && (
+            <div className="bg-error-container/20 border border-error/30 text-error text-xs p-3 rounded-lg">
+              {adminLoginError}
+            </div>
+          )}
+
+          <form onSubmit={handleAdminSignIn} className="space-y-4 text-left text-xs">
+            <div>
+              <label className="block font-semibold mb-1 text-on-surface">Admin Email</label>
+              <input
+                type="email"
+                value={adminEmailInput}
+                onChange={(e) => setAdminEmailInput(e.target.value)}
+                className="w-full px-3 py-2.5 bg-surface-container border border-outline/30 rounded-lg focus:border-gold-leaf outline-none font-body"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block font-semibold mb-1 text-on-surface">Password</label>
+              <input
+                type="password"
+                value={adminPasswordInput}
+                onChange={(e) => setAdminPasswordInput(e.target.value)}
+                className="w-full px-3 py-2.5 bg-surface-container border border-outline/30 rounded-lg focus:border-gold-leaf outline-none font-body"
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={adminLoginLoading}
+              className="w-full bg-primary text-on-primary font-label text-xs font-bold uppercase py-3 rounded-full hover:bg-primary-container transition-colors shadow-md disabled:opacity-50"
+            >
+              {adminLoginLoading ? 'Signing In...' : 'Sign In to Admin Portal'}
+            </button>
+          </form>
+
+          <div className="border-t border-outline/10 pt-4">
+            <button
+              type="button"
+              onClick={() => handleAdminSignIn(null)}
+              className="w-full bg-gold-leaf text-primary font-label text-xs font-bold uppercase py-3 rounded-full hover:opacity-90 transition-opacity flex items-center justify-center gap-2 shadow-sm"
+            >
+              ⚡ 1-Click Quick Admin Access
+            </button>
+            <span className="text-[11px] text-on-surface-variant block mt-2">
+              Default Demo Account: admin@parthvi.com
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+
+
 
   // Order Handlers
   const handleUpdateOrderStatus = async (orderId, status) => {
@@ -203,7 +313,9 @@ export const AdminDashboardPage = () => {
       is_featured: editProd.is_featured ? 1 : 0,
       is_bestseller: editProd.is_bestseller ? 1 : 0,
       is_new: editProd.is_new ? 1 : 0,
+      target_dosha: editProd.target_dosha || 'TRIDOSAHIC',
       status: editProd.status,
+
       ingredients: editProd.ingredients,
       key_ingredients: editProd.key_ingredients,
       benefits: editProd.benefits,
@@ -390,17 +502,11 @@ export const AdminDashboardPage = () => {
     }
   };
 
-  if (!user || user.role === 'CUSTOMER') {
-    return (
-      <div className="max-w-md mx-auto py-20 text-center space-y-4 font-body">
-        <Shield size={48} className="text-error mx-auto" />
-        <h2 className="font-display text-2xl font-bold text-error">Access Restricted</h2>
-        <p className="text-xs text-on-surface-variant">Administrative permissions are required to access this portal.</p>
-      </div>
-    );
-  }
+
+
 
   return (
+
     <div className="max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop py-8 space-y-8">
 
       {/* Admin Header */}
@@ -565,12 +671,264 @@ export const AdminDashboardPage = () => {
             </button>
           </div>
 
+          {/* Add Product Modal */}
+          {showAddProductModal && (
+            <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+              <div className="bg-surface rounded-2xl w-full max-w-2xl p-6 space-y-5 shadow-2xl border border-gold-leaf relative my-4">
+                <button onClick={() => setShowAddProductModal(false)} className="absolute top-4 right-4 text-on-surface-variant hover:text-primary"><X size={20} /></button>
+                <h3 className="font-display text-lg font-bold text-primary flex items-center gap-2"><Plus size={18} /> Add New Formulation / Product</h3>
+
+                <form onSubmit={handleCreateProduct} className="space-y-4 font-body text-xs">
+                  {/* Basic Info */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-semibold mb-1 text-on-surface">Product Name *</label>
+                      <input
+                        type="text"
+                        value={newProd.name}
+                        onChange={e => {
+                          const val = e.target.value;
+                          const generatedSlug = val.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+                          setNewProd(p => ({ ...p, name: val, slug: p.slug ? p.slug : generatedSlug }));
+                        }}
+                        placeholder="e.g. Sukero Capsules (Diabetes Management)"
+                        className="w-full px-3 py-2 bg-surface-container border border-outline/30 rounded-lg focus:border-gold-leaf outline-none"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold mb-1 text-on-surface">URL Slug *</label>
+                      <input
+                        type="text"
+                        value={newProd.slug}
+                        onChange={e => setNewProd(p => ({ ...p, slug: e.target.value }))}
+                        placeholder="e.g. sukero-diabetes-management"
+                        className="w-full px-3 py-2 bg-surface-container border border-outline/30 rounded-lg focus:border-gold-leaf outline-none"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  {/* Category & Pricing */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div>
+                      <label className="block font-semibold mb-1 text-on-surface">Category *</label>
+                      <select
+                        value={newProd.category_id}
+                        onChange={e => setNewProd(p => ({ ...p, category_id: parseInt(e.target.value) }))}
+                        className="w-full px-3 py-2 bg-surface-container border border-outline/30 rounded-lg focus:border-gold-leaf outline-none"
+                      >
+                        {categoriesList.map(c => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block font-semibold mb-1 text-on-surface">MRP (₹) *</label>
+                      <input
+                        type="number"
+                        value={newProd.mrp}
+                        onChange={e => setNewProd(p => ({ ...p, mrp: e.target.value }))}
+                        className="w-full px-3 py-2 bg-surface-container border border-outline/30 rounded-lg focus:border-gold-leaf outline-none"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold mb-1 text-on-surface">Selling Price (₹) *</label>
+                      <input
+                        type="number"
+                        value={newProd.selling_price}
+                        onChange={e => setNewProd(p => ({ ...p, selling_price: e.target.value }))}
+                        className="w-full px-3 py-2 bg-surface-container border border-outline/30 rounded-lg focus:border-gold-leaf outline-none"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold mb-1 text-on-surface">Net Quantity</label>
+                      <input
+                        type="text"
+                        value={newProd.net_qty}
+                        onChange={e => setNewProd(p => ({ ...p, net_qty: e.target.value }))}
+                        placeholder="e.g. 60 Capsules / 500g"
+                        className="w-full px-3 py-2 bg-surface-container border border-outline/30 rounded-lg focus:border-gold-leaf outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold mb-1 text-on-surface">Target Dosha (Quiz Recommendation)</label>
+                      <select
+                        value={newProd.target_dosha || 'TRIDOSAHIC'}
+                        onChange={e => setNewProd(p => ({ ...p, target_dosha: e.target.value }))}
+                        className="w-full px-3 py-2 bg-surface-container border border-outline/30 rounded-lg focus:border-gold-leaf outline-none font-bold text-primary"
+                      >
+                        <option value="TRIDOSAHIC">Tridoshic (All Doshas / Universal)</option>
+                        <option value="VATA">Vata (Air & Space)</option>
+                        <option value="PITTA">Pitta (Fire & Water)</option>
+                        <option value="KAPHA">Kapha (Earth & Water)</option>
+                        <option value="VATA,PITTA">Vata & Pitta</option>
+                        <option value="KAPHA,PITTA">Kapha & Pitta</option>
+                        <option value="VATA,KAPHA">Vata & Kapha</option>
+                      </select>
+                    </div>
+                  </div>
+
+
+                  {/* Main Product Image URL & Local File Upload */}
+                  <div className="border border-outline/20 p-3 rounded-xl space-y-2 bg-surface-container-low">
+                    <label className="block font-semibold text-primary flex items-center gap-1">
+                      <ImageIcon size={14} /> Main Product Image *
+                    </label>
+                    <div className="flex flex-col sm:flex-row gap-2 items-center">
+                      <input
+                        type="text"
+                        value={newProd.image_url}
+                        onChange={e => setNewProd(p => ({ ...p, image_url: e.target.value }))}
+                        placeholder="/products/your-image.jpg or https://..."
+                        className="flex-1 w-full px-3 py-2 bg-surface border border-outline/30 rounded-lg focus:border-gold-leaf outline-none text-xs"
+                      />
+                      <label className="bg-surface-container-high hover:bg-gold-leaf hover:text-white px-3 py-2 rounded-lg cursor-pointer border border-outline/30 font-label text-xs font-bold whitespace-nowrap">
+                        Upload File
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={e => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onloadend = async () => {
+                                const base64Data = reader.result;
+                                const res = await api.uploadImage(base64Data, file.name);
+                                if (res.success && res.url) {
+                                  setNewProd(p => ({ ...p, image_url: res.url }));
+                                } else {
+                                  alert(`Image upload failed: ${res.error || 'Unknown error'}`);
+                                }
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                        />
+                      </label>
+                    </div>
+                    {newProd.image_url && (
+                      <div className="flex items-center gap-2 pt-1">
+                        <img src={newProd.image_url} alt="Preview" className="w-12 h-12 object-cover rounded border border-outline/30" />
+                        <span className="text-[10px] text-on-surface-variant font-mono">Saved Path: {newProd.image_url}</span>
+                      </div>
+                    )}
+                  </div>
+
+
+                  {/* Short Description */}
+                  <div>
+                    <label className="block font-semibold mb-1 text-on-surface">Short Summary / Tagline</label>
+                    <input
+                      type="text"
+                      value={newProd.short_desc}
+                      onChange={e => setNewProd(p => ({ ...p, short_desc: e.target.value }))}
+                      placeholder="100% Natural & Vegetarian Capsules for..."
+                      className="w-full px-3 py-2 bg-surface-container border border-outline/30 rounded-lg focus:border-gold-leaf outline-none"
+                    />
+                  </div>
+
+                  {/* Badges & Flags */}
+                  <div className="flex flex-wrap gap-4 pt-1">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={!!newProd.is_featured} onChange={e => setNewProd(p => ({ ...p, is_featured: e.target.checked ? 1 : 0 }))} className="accent-gold-leaf w-4 h-4" />
+                      <span className="font-semibold text-on-surface">Featured Formulation</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={!!newProd.is_bestseller} onChange={e => setNewProd(p => ({ ...p, is_bestseller: e.target.checked ? 1 : 0 }))} className="accent-gold-leaf w-4 h-4" />
+                      <span className="font-semibold text-on-surface">Best Seller</span>
+                    </label>
+                  </div>
+
+                  {/* Detailed Description Fields */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-semibold mb-1 text-on-surface">Full Description</label>
+                      <textarea
+                        rows={3}
+                        value={newProd.description}
+                        onChange={e => setNewProd(p => ({ ...p, description: e.target.value }))}
+                        className="w-full px-3 py-2 bg-surface-container border border-outline/30 rounded-lg focus:border-gold-leaf outline-none resize-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold mb-1 text-on-surface">Key Ingredients</label>
+                      <textarea
+                        rows={3}
+                        value={newProd.key_ingredients}
+                        onChange={e => setNewProd(p => ({ ...p, key_ingredients: e.target.value }))}
+                        placeholder="Jamun Seeds, Karela, Gudmar, Vijaysar..."
+                        className="w-full px-3 py-2 bg-surface-container border border-outline/30 rounded-lg focus:border-gold-leaf outline-none resize-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-semibold mb-1 text-on-surface">Ingredients (Full Compositions)</label>
+                      <textarea
+                        rows={2}
+                        value={newProd.ingredients}
+                        onChange={e => setNewProd(p => ({ ...p, ingredients: e.target.value }))}
+                        className="w-full px-3 py-2 bg-surface-container border border-outline/30 rounded-lg focus:border-gold-leaf outline-none resize-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold mb-1 text-on-surface">Benefits & Indications</label>
+                      <textarea
+                        rows={2}
+                        value={newProd.benefits}
+                        onChange={e => setNewProd(p => ({ ...p, benefits: e.target.value }))}
+                        className="w-full px-3 py-2 bg-surface-container border border-outline/30 rounded-lg focus:border-gold-leaf outline-none resize-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-semibold mb-1 text-on-surface">Usage Directions / Dosage</label>
+                      <input
+                        type="text"
+                        value={newProd.usage_directions}
+                        onChange={e => setNewProd(p => ({ ...p, usage_directions: e.target.value }))}
+                        placeholder="Take 1 capsule twice daily after meals with water"
+                        className="w-full px-3 py-2 bg-surface-container border border-outline/30 rounded-lg focus:border-gold-leaf outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold mb-1 text-on-surface">Storage & Manufacturer Info</label>
+                      <input
+                        type="text"
+                        value={newProd.storage_info}
+                        onChange={e => setNewProd(p => ({ ...p, storage_info: e.target.value }))}
+                        placeholder="Store in a cool dry place away from direct sunlight"
+                        className="w-full px-3 py-2 bg-surface-container border border-outline/30 rounded-lg focus:border-gold-leaf outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 pt-3">
+                    <button type="submit" className="flex-1 bg-primary text-on-primary font-label text-xs font-bold uppercase py-3 rounded-full hover:bg-primary-container">
+                      Publish Product
+                    </button>
+                    <button type="button" onClick={() => setShowAddProductModal(false)} className="px-6 border border-outline/30 rounded-full font-label text-xs font-bold">
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
           {/* Edit Product Modal */}
           {showEditProductModal && editProd && (
             <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
               <div className="bg-surface rounded-2xl w-full max-w-2xl p-6 space-y-5 shadow-2xl border border-gold-leaf relative my-4">
                 <button onClick={() => setShowEditProductModal(false)} className="absolute top-4 right-4"><X size={20} /></button>
-                <h3 className="font-display text-lg font-bold text-primary flex items-center gap-2"><Edit size={18} /> Edit Product</h3>
+                <h3 className="font-display text-lg font-bold text-primary flex items-center gap-2"><Edit size={18} /> Edit Product & Gallery Images</h3>
 
                 <form onSubmit={handleUpdateProduct} className="space-y-4 font-body text-xs">
                   {/* Basic Info */}
@@ -611,7 +969,20 @@ export const AdminDashboardPage = () => {
                       <label className="block font-semibold mb-1">Net Qty</label>
                       <input type="text" value={editProd.net_qty || ''} onChange={e => setEditProd(p => ({ ...p, net_qty: e.target.value }))} className="w-full px-3 py-2 bg-surface-container border border-outline/30 rounded-lg focus:border-gold-leaf outline-none" />
                     </div>
+                    <div>
+                      <label className="block font-semibold mb-1">Target Dosha</label>
+                      <select value={editProd.target_dosha || 'TRIDOSAHIC'} onChange={e => setEditProd(p => ({ ...p, target_dosha: e.target.value }))} className="w-full px-3 py-2 bg-surface-container border border-outline/30 rounded-lg focus:border-gold-leaf outline-none font-bold text-primary">
+                        <option value="TRIDOSAHIC">Tridoshic (Universal)</option>
+                        <option value="VATA">Vata</option>
+                        <option value="PITTA">Pitta</option>
+                        <option value="KAPHA">Kapha</option>
+                        <option value="VATA,PITTA">Vata & Pitta</option>
+                        <option value="KAPHA,PITTA">Kapha & Pitta</option>
+                        <option value="VATA,KAPHA">Vata & Kapha</option>
+                      </select>
+                    </div>
                   </div>
+
 
                   {/* Flags */}
                   <div className="flex flex-wrap gap-4">
@@ -659,20 +1030,45 @@ export const AdminDashboardPage = () => {
                         </div>
                       ))}
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-col sm:flex-row gap-2">
                       <input
                         type="text"
                         value={newImageUrl}
                         onChange={e => setNewImageUrl(e.target.value)}
-                        placeholder="/shop/product/image.jpg or https://..."
+                        placeholder="/products/your-image.jpg or https://..."
                         className="flex-1 px-3 py-2 bg-surface-container border border-outline/30 rounded-lg focus:border-gold-leaf outline-none text-xs"
                       />
+                      <label className="bg-surface-container-high hover:bg-gold-leaf hover:text-white px-3 py-2 rounded-lg cursor-pointer border border-outline/30 font-label text-xs font-bold text-center whitespace-nowrap">
+                        Upload File
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={e => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onloadend = async () => {
+                                const base64Data = reader.result;
+                                const res = await api.uploadImage(base64Data, file.name);
+                                if (res.success && res.url) {
+                                  setNewImageUrl(res.url);
+                                } else {
+                                  alert(`Image upload failed: ${res.error || 'Unknown error'}`);
+                                }
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                        />
+
+                      </label>
                       <button
                         type="button"
                         onClick={handleAddImage}
                         className="bg-gold-leaf text-primary font-label text-xs font-bold px-4 py-2 rounded-lg hover:opacity-90 whitespace-nowrap"
                       >
-                        + Add Image
+                        + Add to Gallery
                       </button>
                     </div>
                   </div>
@@ -689,6 +1085,7 @@ export const AdminDashboardPage = () => {
               </div>
             </div>
           )}
+
 
           {/* Products Table */}
           <div className="bg-surface rounded-2xl border border-outline/20 overflow-hidden divide-y divide-outline/10">

@@ -80,11 +80,6 @@ export const Header = () => {
             <Link to="/shop?category=hair-care" className="hover:text-primary transition-colors">Hair Care</Link>
             <Link to="/shop?category=nutrition-supplements" className="hover:text-primary transition-colors">Nutrition</Link>
             <Link to="/wellness-knowledge" className="hover:text-primary transition-colors">Wellness Guide</Link>
-            {user && user.role !== 'CUSTOMER' && (
-              <Link to="/admin" className="text-gold-leaf font-bold hover:underline flex items-center gap-1">
-                <Shield size={14} /> Admin Portal
-              </Link>
-            )}
           </nav>
 
           {/* Header Action Buttons */}
@@ -146,14 +141,10 @@ export const Header = () => {
               <Link to="/shop?category=personal-care" onClick={() => setIsMobileMenuOpen(false)}>Personal Care</Link>
               <Link to="/wellness-knowledge" onClick={() => setIsMobileMenuOpen(false)}>Wellness Knowledge</Link>
               <Link to="/account" onClick={() => setIsMobileMenuOpen(false)}>My Account & Orders</Link>
-              {user && user.role !== 'CUSTOMER' && (
-                <Link to="/admin" onClick={() => setIsMobileMenuOpen(false)} className="text-gold-leaf font-bold">
-                  Admin Dashboard
-                </Link>
-              )}
             </nav>
           </div>
         )}
+
       </header>
 
       {/* Global Search Modal */}

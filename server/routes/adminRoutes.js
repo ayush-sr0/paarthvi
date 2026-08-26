@@ -1,8 +1,16 @@
 import express from 'express';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { query, get, run } from '../db/database.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const publicProductsDir = path.join(__dirname, '../../public/products');
+
 const router = express.Router();
+
 
 const logAuditAction = async (req, action, entity, entity_id, prev_val = null, new_val = null) => {
   try {
@@ -163,14 +171,14 @@ router.get('/products', requireRole(['PRODUCT_MANAGER']), async (req, res, next)
 
 router.post('/products', requireRole(['PRODUCT_MANAGER']), async (req, res, next) => {
   try {
-    const { name, slug, category_id, brand, short_desc, description, mrp, selling_price, is_featured, is_bestseller, ingredients, key_ingredients, benefits, usage_directions, warnings, storage_info, net_qty, manufacturer_info, image_url } = req.body;
+    const { name, slug, category_id, brand, short_desc, description, mrp, selling_price, is_featured, is_bestseller, target_dosha, ingredients, key_ingredients, benefits, usage_directions, warnings, storage_info, net_qty, manufacturer_info, image_url } = req.body;
 
     const resProd = await run(
       `INSERT INTO products (
         name, slug, category_id, brand, short_desc, description, mrp, selling_price,
-        is_featured, is_bestseller, ingredients, key_ingredients, benefits, usage_directions, warnings, storage_info, net_qty, manufacturer_info
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18) RETURNING id`,
-      [name, slug, category_id, brand || 'Parthvi Ayurveda', short_desc, description, mrp, selling_price, Boolean(is_featured), Boolean(is_bestseller), ingredients, key_ingredients, benefits, usage_directions, warnings, storage_info, net_qty, manufacturer_info]
+        is_featured, is_bestseller, target_dosha, status, ingredients, key_ingredients, benefits, usage_directions, warnings, storage_info, net_qty, manufacturer_info
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20) RETURNING id`,
+      [name, slug, category_id, brand || 'Parthvi Ayurveda', short_desc, description, mrp, selling_price, Boolean(is_featured), Boolean(is_bestseller), target_dosha || 'TRIDOSAHIC', 'PUBLISHED', ingredients, key_ingredients, benefits, usage_directions, warnings, storage_info, net_qty, manufacturer_info]
     );
 
     const productId = resProd.lastID;
@@ -201,7 +209,7 @@ router.put('/products/:id', requireRole(['PRODUCT_MANAGER']), async (req, res, n
 
     const {
       name, slug, category_id, brand, short_desc, description, mrp, selling_price,
-      is_featured, is_bestseller, is_new, status,
+      is_featured, is_bestseller, is_new, target_dosha, status,
       ingredients, key_ingredients, benefits, usage_directions,
       warnings, storage_info, net_qty, manufacturer_info,
     } = req.body;
@@ -212,19 +220,19 @@ router.put('/products/:id', requireRole(['PRODUCT_MANAGER']), async (req, res, n
         brand = COALESCE($4, brand), short_desc = COALESCE($5, short_desc), description = COALESCE($6, description),
         mrp = COALESCE($7, mrp), selling_price = COALESCE($8, selling_price),
         is_featured = COALESCE($9, is_featured), is_bestseller = COALESCE($10, is_bestseller),
-        is_new = COALESCE($11, is_new), status = COALESCE($12, status),
-        ingredients = COALESCE($13, ingredients), key_ingredients = COALESCE($14, key_ingredients),
-        benefits = COALESCE($15, benefits), usage_directions = COALESCE($16, usage_directions),
-        warnings = COALESCE($17, warnings), storage_info = COALESCE($18, storage_info),
-        net_qty = COALESCE($19, net_qty), manufacturer_info = COALESCE($20, manufacturer_info),
+        is_new = COALESCE($11, is_new), target_dosha = COALESCE($12, target_dosha), status = COALESCE($13, status),
+        ingredients = COALESCE($14, ingredients), key_ingredients = COALESCE($15, key_ingredients),
+        benefits = COALESCE($16, benefits), usage_directions = COALESCE($17, usage_directions),
+        warnings = COALESCE($18, warnings), storage_info = COALESCE($19, storage_info),
+        net_qty = COALESCE($20, net_qty), manufacturer_info = COALESCE($21, manufacturer_info),
         updated_at = NOW()
-       WHERE id = $21`,
+       WHERE id = $22`,
       [
         name, slug, category_id, brand, short_desc, description, mrp, selling_price,
         is_featured != null ? Boolean(is_featured) : null,
         is_bestseller != null ? Boolean(is_bestseller) : null,
         is_new != null ? Boolean(is_new) : null,
-        status, ingredients, key_ingredients, benefits, usage_directions,
+        target_dosha, status, ingredients, key_ingredients, benefits, usage_directions,
         warnings, storage_info, net_qty, manufacturer_info,
         productId,
       ]
@@ -236,6 +244,7 @@ router.put('/products/:id', requireRole(['PRODUCT_MANAGER']), async (req, res, n
     next(err);
   }
 });
+
 
 // Delete Product
 router.delete('/products/:id', requireRole(['PRODUCT_MANAGER']), async (req, res, next) => {
@@ -524,13 +533,38 @@ router.post('/system/webhooks/:id/retry', requireRole(['SUPER_ADMIN']), async (r
   }
 });
 
-router.get('/system/audit-logs', requireRole(['SUPER_ADMIN']), async (req, res, next) => {
+router.post('/upload', requireRole(['SUPER_ADMIN', 'PRODUCT_MANAGER', 'CONTENT_MANAGER']), async (req, res, next) => {
   try {
-    const logs = await query('SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 100');
-    res.json({ success: true, logs });
+    const { image, filename } = req.body;
+    if (!image) {
+      return res.status(400).json({ success: false, error: 'No image data received' });
+    }
+
+    let ext = 'jpg';
+    let base64Data = image;
+    const matches = image.match(/^data:image\/([a-zA-Z0-9]+);base64,(.+)$/);
+    if (matches && matches.length === 3) {
+      ext = matches[1] === 'jpeg' ? 'jpg' : matches[1];
+      base64Data = matches[2];
+    }
+
+    const cleanName = filename
+      ? filename.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/\.[^/.]+$/, '')
+      : 'product';
+    const uniqueFilename = `${cleanName}-${Date.now()}.${ext}`;
+    const filePath = path.join(publicProductsDir, uniqueFilename);
+
+    const buffer = Buffer.from(base64Data, 'base64');
+    await fs.promises.mkdir(publicProductsDir, { recursive: true });
+    await fs.promises.writeFile(filePath, buffer);
+
+    const fileUrl = `/products/${uniqueFilename}`;
+    console.log(`✅ Saved uploaded image to disk: ${filePath}`);
+    res.json({ success: true, url: fileUrl });
   } catch (err) {
     next(err);
   }
 });
 
 export default router;
+
