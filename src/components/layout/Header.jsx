@@ -61,19 +61,13 @@ export const Header = () => {
             {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
           </button>
 
-          {/* Logo & Brand Name */}
-          <Link to="/" className="flex items-center gap-3 group">
-            <div className="w-10 h-10 rounded-md bg-primary-container/20 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-on-primary transition-colors duration-300">
-              <span className="material-symbols-outlined text-2xl">spa</span>
-            </div>
-            <div>
-              <span className="font-display text-xl md:text-2xl font-bold tracking-tight text-primary block leading-none">
-                Parthvi Ayurveda
-              </span>
-              <span className="font-label text-[10px] text-gold-leaf tracking-widest uppercase block mt-0.5">
-                Authentic Heritage Wellness
-              </span>
-            </div>
+          {/* Logo & Brand Emblem */}
+          <Link to="/" className="flex items-center group">
+            <img
+              src="/logo.svg"
+              alt="Paarthvi Ayurveda"
+              className="h-12 md:h-16 w-auto object-contain transition-transform duration-300 group-hover:scale-105"
+            />
           </Link>
 
           {/* Desktop Navigation Links */}

@@ -34,7 +34,7 @@ router.post('/sync', async (req, res, next) => {
          FROM product_variants v
          JOIN products p ON v.product_id = p.id
          LEFT JOIN inventory i ON v.id = i.variant_id
-         WHERE v.id = ? AND p.status = 'PUBLISHED'`,
+         WHERE v.id = $1 AND p.status = 'PUBLISHED'`,
         [item.variant_id]
       );
 
@@ -68,7 +68,7 @@ router.post('/sync', async (req, res, next) => {
 
     if (coupon_code) {
       const coupon = await get(
-        `SELECT * FROM coupons WHERE UPPER(code) = UPPER(?) AND active = 1 AND (expiry_date IS NULL OR expiry_date >= CURRENT_DATE)`,
+        `SELECT * FROM coupons WHERE UPPER(code) = UPPER($1) AND active = TRUE AND (expiry_date IS NULL OR expiry_date >= CURRENT_DATE)`,
         [coupon_code]
       );
 
@@ -78,7 +78,7 @@ router.post('/sync', async (req, res, next) => {
         coupon_error = `Minimum order value of ₹${coupon.min_cart_value} required`;
       } else {
         // Check global usage limit
-        const globalUsage = await get('SELECT COUNT(id) as count FROM coupon_usages WHERE coupon_id = ?', [coupon.id]);
+        const globalUsage = await get('SELECT COUNT(id) as count FROM coupon_usages WHERE coupon_id = $1', [coupon.id]);
         if (globalUsage.count >= coupon.usage_limit) {
           coupon_error = 'Coupon usage limit reached';
         }
@@ -86,7 +86,7 @@ router.post('/sync', async (req, res, next) => {
         // Check per-user limit
         if (!coupon_error && req.user) {
           const userUsage = await get(
-            'SELECT COUNT(id) as count FROM coupon_usages WHERE coupon_id = ? AND user_id = ?',
+            'SELECT COUNT(id) as count FROM coupon_usages WHERE coupon_id = $1 AND user_id = $2',
             [coupon.id, req.user.id]
           );
           if (userUsage.count >= coupon.per_user_limit) {

@@ -19,7 +19,7 @@ try {
   console.warn('Razorpay SDK initialized with test fallback key.');
 }
 
-// Check pincode serviceability (uses shipping provider abstraction)
+// Check pincode serviceability
 router.get('/pincode/:pincode', async (req, res) => {
   try {
     const provider = getShippingProvider();
@@ -30,37 +30,33 @@ router.get('/pincode/:pincode', async (req, res) => {
   }
 });
 
-// Helper: Validate coupon with per-user limit enforcement (FR-034)
+// Helper: Validate coupon with per-user limit enforcement
 const validateCoupon = async (couponCode, subtotal, userId) => {
   if (!couponCode) return { discount_amount: 0, applied_coupon: null };
 
   const coupon = await get(
-    `SELECT * FROM coupons WHERE UPPER(code) = UPPER(?) AND active = 1 AND (expiry_date IS NULL OR expiry_date >= CURRENT_DATE)`,
+    `SELECT * FROM coupons WHERE UPPER(code) = UPPER($1) AND active = TRUE AND (expiry_date IS NULL OR expiry_date >= CURRENT_DATE)`,
     [couponCode]
   );
 
   if (!coupon) return { discount_amount: 0, applied_coupon: null, error: 'Invalid or expired coupon code' };
 
-  // Check start date
   if (coupon.start_date && new Date(coupon.start_date) > new Date()) {
     return { discount_amount: 0, applied_coupon: null, error: 'Coupon is not yet active' };
   }
 
-  // Check minimum cart value
   if (subtotal < coupon.min_cart_value) {
     return { discount_amount: 0, applied_coupon: null, error: `Minimum order value of ₹${coupon.min_cart_value} required` };
   }
 
-  // Check global usage limit
-  const globalUsage = await get('SELECT COUNT(id) as count FROM coupon_usages WHERE coupon_id = ?', [coupon.id]);
+  const globalUsage = await get('SELECT COUNT(id) as count FROM coupon_usages WHERE coupon_id = $1', [coupon.id]);
   if (globalUsage.count >= coupon.usage_limit) {
     return { discount_amount: 0, applied_coupon: null, error: 'Coupon usage limit reached' };
   }
 
-  // Check per-user limit
   if (userId) {
     const userUsage = await get(
-      'SELECT COUNT(id) as count FROM coupon_usages WHERE coupon_id = ? AND user_id = ?',
+      'SELECT COUNT(id) as count FROM coupon_usages WHERE coupon_id = $1 AND user_id = $2',
       [coupon.id, userId]
     );
     if (userUsage.count >= coupon.per_user_limit) {
@@ -68,7 +64,6 @@ const validateCoupon = async (couponCode, subtotal, userId) => {
     }
   }
 
-  // Calculate discount
   let discount_amount = 0;
   if (coupon.discount_type === 'PERCENT') {
     discount_amount = (subtotal * coupon.discount_value) / 100;
@@ -91,11 +86,11 @@ const validateCoupon = async (couponCode, subtotal, userId) => {
   };
 };
 
-// Helper: FEFO batch allocation (FR-028) — allocates stock from earliest-expiry batches
+// Helper: FEFO batch allocation
 const allocateFEFO = async (variantId, quantityNeeded) => {
   const batches = await query(
     `SELECT * FROM batches
-     WHERE variant_id = ? AND expiry_date > DATE('now') AND quantity > 0
+     WHERE variant_id = $1 AND expiry_date > CURRENT_DATE AND quantity > 0
      ORDER BY expiry_date ASC`,
     [variantId]
   );
@@ -109,8 +104,7 @@ const allocateFEFO = async (variantId, quantityNeeded) => {
     const take = Math.min(remaining, batch.quantity);
     allocations.push({ batch_id: batch.id, batch_number: batch.batch_number, quantity: take });
 
-    // Deduct from batch
-    await run('UPDATE batches SET quantity = quantity - ? WHERE id = ?', [take, batch.id]);
+    await run('UPDATE batches SET quantity = quantity - $1 WHERE id = $2', [take, batch.id]);
     remaining -= take;
   }
 
@@ -123,7 +117,7 @@ router.post('/initiate', authenticateToken, async (req, res, next) => {
     const {
       items,
       shipping_address,
-      payment_method, // RAZORPAY or COD
+      payment_method,
       coupon_code,
       guest_email,
       guest_name,
@@ -138,14 +132,13 @@ router.post('/initiate', authenticateToken, async (req, res, next) => {
       return res.status(400).json({ success: false, error: 'Complete delivery address is required' });
     }
 
-    // Validate pincode serviceability via shipping provider
     const provider = getShippingProvider();
     const serviceCheck = await provider.checkServiceability(shipping_address.pincode);
     if (!serviceCheck.serviceable) {
       return res.status(400).json({ success: false, error: `Delivery not available to pincode ${shipping_address.pincode}` });
     }
 
-    // 1. Validate items & inventory server-side
+    // 1. Validate items & inventory
     let subtotal = 0;
     const validatedItems = [];
 
@@ -155,7 +148,7 @@ router.post('/initiate', authenticateToken, async (req, res, next) => {
          FROM product_variants v
          JOIN products p ON v.product_id = p.id
          LEFT JOIN inventory i ON v.id = i.variant_id
-         WHERE v.id = ? AND p.status = 'PUBLISHED'`,
+         WHERE v.id = $1 AND p.status = 'PUBLISHED'`,
         [item.variant_id]
       );
 
@@ -186,7 +179,7 @@ router.post('/initiate', authenticateToken, async (req, res, next) => {
       });
     }
 
-    // 2. Validate Coupon with per-user limit
+    // 2. Validate Coupon
     const userId = req.user ? req.user.id : null;
     const couponResult = await validateCoupon(coupon_code, subtotal, userId);
     if (couponResult.error) {
@@ -197,8 +190,7 @@ router.post('/initiate', authenticateToken, async (req, res, next) => {
     const discountedSubtotal = Math.max(0, subtotal - discount_amount);
     const tax_amount = Math.round(discountedSubtotal * 0.12 * 100) / 100;
 
-    // Use shipping provider for rate
-    const totalWeight = validatedItems.reduce((acc, i) => acc + i.quantity * 250, 0); // approx 250g per item
+    const totalWeight = validatedItems.reduce((acc, i) => acc + i.quantity * 250, 0);
     const rateResult = await provider.getRate(shipping_address.pincode, totalWeight, payment_method === 'COD');
     const shipping_fee = discountedSubtotal >= 499 ? 0 : (rateResult.success ? rateResult.shipping_fee : 50);
 
@@ -214,16 +206,15 @@ router.post('/initiate', authenticateToken, async (req, res, next) => {
     const customerName = req.user ? req.user.name : guest_name;
     const customerPhone = req.user ? req.user.phone : guest_phone;
 
-    // 4. Reserve stock transactionally + FEFO batch allocation
+    // 4. Reserve stock + FEFO batch allocation
     for (const item of validatedItems) {
       await run(
         `UPDATE inventory
-         SET available_stock = available_stock - ?, reserved_stock = reserved_stock + ?
-         WHERE variant_id = ?`,
+         SET available_stock = available_stock - $1, reserved_stock = reserved_stock + $2
+         WHERE variant_id = $3`,
         [item.quantity, item.quantity, item.variant_id]
       );
 
-      // Attempt FEFO batch allocation (best-effort, non-blocking)
       try {
         await allocateFEFO(item.variant_id, item.quantity);
       } catch (fefoErr) {
@@ -237,7 +228,7 @@ router.post('/initiate', authenticateToken, async (req, res, next) => {
         order_number, user_id, guest_email, guest_name, guest_phone, status,
         subtotal, tax_amount, shipping_fee, discount_amount, total_amount,
         payment_method, payment_status, shipping_address_json, invoice_number
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING id`,
       [
         orderNumber,
         userId,
@@ -251,7 +242,7 @@ router.post('/initiate', authenticateToken, async (req, res, next) => {
         discount_amount,
         total_amount,
         payment_method,
-        payment_method === 'COD' ? 'PENDING' : 'PENDING',
+        'PENDING',
         JSON.stringify(shipping_address),
         invoiceNumber,
       ]
@@ -264,7 +255,7 @@ router.post('/initiate', authenticateToken, async (req, res, next) => {
       await run(
         `INSERT INTO order_items (
           order_id, product_id, variant_id, product_name, variant_name, sku, unit_price, mrp, quantity, total_price
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
         [
           orderId,
           item.product_id,
@@ -280,28 +271,28 @@ router.post('/initiate', authenticateToken, async (req, res, next) => {
       );
     }
 
-    // 6. Record coupon usage (FR-034)
+    // 6. Record coupon usage
     if (couponResult.applied_coupon) {
       await run(
-        'INSERT INTO coupon_usages (coupon_id, user_id, order_id) VALUES (?, ?, ?)',
+        'INSERT INTO coupon_usages (coupon_id, user_id, order_id) VALUES ($1, $2, $3)',
         [couponResult.applied_coupon.id, userId, orderId]
       );
     }
 
-    // Record Analytics Purchase / Checkout Event
+    // Record Analytics event
     await run(
       `INSERT INTO analytics_events (event_name, session_id, user_id, page, order_id, metadata_json)
-       VALUES ('CHECKOUT_START', 'checkout_session', ?, '/checkout', ?, ?)`,
+       VALUES ('CHECKOUT_START', 'checkout_session', $1, '/checkout', $2, $3)`,
       [userId, orderId, JSON.stringify({ amount: total_amount, method: payment_method })]
     );
 
-    // 7. Payment initiation (Razorpay vs COD)
+    // 7. Payment initiation
     if (payment_method === 'RAZORPAY') {
       let rzpOrder = null;
       try {
         if (razorpay) {
           rzpOrder = await razorpay.orders.create({
-            amount: Math.round(total_amount * 100), // amount in paise
+            amount: Math.round(total_amount * 100),
             currency: 'INR',
             receipt: orderNumber,
             notes: { order_id: orderId, order_number: orderNumber },
@@ -312,7 +303,7 @@ router.post('/initiate', authenticateToken, async (req, res, next) => {
       }
 
       const rzpOrderId = rzpOrder ? rzpOrder.id : `rzp_order_${orderId}_${Date.now()}`;
-      await run('UPDATE orders SET razorpay_order_id = ? WHERE id = ?', [rzpOrderId, orderId]);
+      await run('UPDATE orders SET razorpay_order_id = $1 WHERE id = $2', [rzpOrderId, orderId]);
 
       res.json({
         success: true,
@@ -328,7 +319,7 @@ router.post('/initiate', authenticateToken, async (req, res, next) => {
       });
     } else {
       // COD Order direct confirmation
-      await run("UPDATE orders SET status = 'CONFIRMED' WHERE id = ?", [orderId]);
+      await run("UPDATE orders SET status = 'CONFIRMED' WHERE id = $1", [orderId]);
       res.json({
         success: true,
         order_id: orderId,
@@ -337,8 +328,13 @@ router.post('/initiate', authenticateToken, async (req, res, next) => {
         amount: total_amount,
         status: 'CONFIRMED',
       });
-// POST /api/checkout/release-expired-reservations (FR-027)
-// Background worker releasing reserved stock for timed out pending payment orders (>15 mins)
+    }
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/checkout/release-expired-reservations
 router.post('/release-expired-reservations', async (req, res, next) => {
   try {
     const expiredOrders = await query(
@@ -347,7 +343,7 @@ router.post('/release-expired-reservations', async (req, res, next) => {
        JOIN order_items oi ON o.id = oi.order_id
        WHERE o.status = 'PENDING'
        AND o.payment_method = 'RAZORPAY'
-       AND o.created_at <= datetime('now', '-15 minutes')`
+       AND o.created_at <= NOW() - INTERVAL '15 minutes'`
     );
 
     const releasedOrders = new Set();
@@ -355,8 +351,8 @@ router.post('/release-expired-reservations', async (req, res, next) => {
     for (const item of expiredOrders) {
       await run(
         `UPDATE inventory
-         SET available_stock = available_stock + ?, reserved_stock = MAX(0, reserved_stock - ?)
-         WHERE variant_id = ?`,
+         SET available_stock = available_stock + $1, reserved_stock = GREATEST(0, reserved_stock - $2)
+         WHERE variant_id = $3`,
         [item.quantity, item.quantity, item.variant_id]
       );
       releasedOrders.add(item.id);
@@ -364,7 +360,7 @@ router.post('/release-expired-reservations', async (req, res, next) => {
 
     for (const orderId of releasedOrders) {
       await run(
-        "UPDATE orders SET status = 'CANCELLED', payment_status = 'EXPIRED' WHERE id = ?",
+        "UPDATE orders SET status = 'CANCELLED', payment_status = 'EXPIRED' WHERE id = $1",
         [orderId]
       );
     }

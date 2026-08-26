@@ -4,15 +4,14 @@ import { requireAuth, authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// Use authenticateToken to optionally identify user
 router.use(authenticateToken);
 
-// GET /api/wishlist — Fetch user's wishlist with product details
+// GET /api/wishlist
 router.get('/', requireAuth, async (req, res, next) => {
   try {
-    let wishlistObj = await get('SELECT * FROM wishlists WHERE user_id = ?', [req.user.id]);
+    let wishlistObj = await get('SELECT * FROM wishlists WHERE user_id = $1', [req.user.id]);
     if (!wishlistObj) {
-      const result = await run('INSERT INTO wishlists (user_id) VALUES (?)', [req.user.id]);
+      const result = await run('INSERT INTO wishlists (user_id) VALUES ($1) RETURNING id', [req.user.id]);
       wishlistObj = { id: result.lastID };
     }
 
@@ -28,7 +27,7 @@ router.get('/', requireAuth, async (req, res, next) => {
        FROM wishlist_items wi
        JOIN products p ON wi.product_id = p.id
        LEFT JOIN categories c ON p.category_id = c.id
-       WHERE wi.wishlist_id = ?
+       WHERE wi.wishlist_id = $1
        ORDER BY wi.created_at DESC`,
       [wishlistObj.id]
     );
@@ -39,7 +38,7 @@ router.get('/', requireAuth, async (req, res, next) => {
   }
 });
 
-// POST /api/wishlist/toggle — Add or remove a product from wishlist
+// POST /api/wishlist/toggle
 router.post('/toggle', requireAuth, async (req, res, next) => {
   try {
     const { product_id } = req.body;
@@ -47,23 +46,23 @@ router.post('/toggle', requireAuth, async (req, res, next) => {
       return res.status(400).json({ success: false, error: 'Product ID is required' });
     }
 
-    let wishlistObj = await get('SELECT * FROM wishlists WHERE user_id = ?', [req.user.id]);
+    let wishlistObj = await get('SELECT * FROM wishlists WHERE user_id = $1', [req.user.id]);
     if (!wishlistObj) {
-      const result = await run('INSERT INTO wishlists (user_id) VALUES (?)', [req.user.id]);
+      const result = await run('INSERT INTO wishlists (user_id) VALUES ($1) RETURNING id', [req.user.id]);
       wishlistObj = { id: result.lastID };
     }
 
     const existing = await get(
-      'SELECT id FROM wishlist_items WHERE wishlist_id = ? AND product_id = ?',
+      'SELECT id FROM wishlist_items WHERE wishlist_id = $1 AND product_id = $2',
       [wishlistObj.id, product_id]
     );
 
     if (existing) {
-      await run('DELETE FROM wishlist_items WHERE id = ?', [existing.id]);
+      await run('DELETE FROM wishlist_items WHERE id = $1', [existing.id]);
       res.json({ success: true, action: 'removed', message: 'Product removed from wishlist' });
     } else {
       await run(
-        'INSERT INTO wishlist_items (wishlist_id, product_id) VALUES (?, ?)',
+        'INSERT INTO wishlist_items (wishlist_id, product_id) VALUES ($1, $2)',
         [wishlistObj.id, product_id]
       );
       res.json({ success: true, action: 'added', message: 'Product added to wishlist' });
@@ -73,7 +72,7 @@ router.post('/toggle', requireAuth, async (req, res, next) => {
   }
 });
 
-// POST /api/wishlist/move-to-cart — Move wishlist item to cart (returns variant info for frontend cart)
+// POST /api/wishlist/move-to-cart
 router.post('/move-to-cart', requireAuth, async (req, res, next) => {
   try {
     const { product_id } = req.body;
@@ -81,12 +80,11 @@ router.post('/move-to-cart', requireAuth, async (req, res, next) => {
       return res.status(400).json({ success: false, error: 'Product ID is required' });
     }
 
-    // Get default variant for the product
     const variant = await get(
       `SELECT v.id as variant_id, v.sku, v.attribute_value, v.selling_price, i.available_stock
        FROM product_variants v
        LEFT JOIN inventory i ON v.id = i.variant_id
-       WHERE v.product_id = ?
+       WHERE v.product_id = $1
        LIMIT 1`,
       [product_id]
     );
@@ -95,10 +93,9 @@ router.post('/move-to-cart', requireAuth, async (req, res, next) => {
       return res.status(400).json({ success: false, error: 'Product is out of stock' });
     }
 
-    // Remove from wishlist
-    const wishlistObj = await get('SELECT id FROM wishlists WHERE user_id = ?', [req.user.id]);
+    const wishlistObj = await get('SELECT id FROM wishlists WHERE user_id = $1', [req.user.id]);
     if (wishlistObj) {
-      await run('DELETE FROM wishlist_items WHERE wishlist_id = ? AND product_id = ?', [wishlistObj.id, product_id]);
+      await run('DELETE FROM wishlist_items WHERE wishlist_id = $1 AND product_id = $2', [wishlistObj.id, product_id]);
     }
 
     res.json({
@@ -111,16 +108,16 @@ router.post('/move-to-cart', requireAuth, async (req, res, next) => {
   }
 });
 
-// GET /api/wishlist/ids — Get just the product IDs in wishlist (for quick frontend checks)
+// GET /api/wishlist/ids
 router.get('/ids', requireAuth, async (req, res, next) => {
   try {
-    const wishlistObj = await get('SELECT id FROM wishlists WHERE user_id = ?', [req.user.id]);
+    const wishlistObj = await get('SELECT id FROM wishlists WHERE user_id = $1', [req.user.id]);
     if (!wishlistObj) {
       return res.json({ success: true, product_ids: [] });
     }
 
     const items = await query(
-      'SELECT product_id FROM wishlist_items WHERE wishlist_id = ?',
+      'SELECT product_id FROM wishlist_items WHERE wishlist_id = $1',
       [wishlistObj.id]
     );
 

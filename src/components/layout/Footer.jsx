@@ -57,10 +57,13 @@ export const Footer = () => {
           
           {/* Brand Philosophy Column */}
           <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-gold-leaf text-2xl">spa</span>
-              <span className="font-display text-xl font-bold tracking-tight">Parthvi Ayurveda</span>
-            </div>
+            <Link to="/" className="inline-block mb-1">
+              <img
+                src="/logo.svg"
+                alt="Paarthvi Ayurveda"
+                className="h-16 w-auto object-contain bg-white/90 p-1.5 rounded-xl shadow-sm"
+              />
+            </Link>
             <p className="text-xs leading-relaxed opacity-80 font-body">
               Restoring constitutional balance through time-honored Ayurvedic formulations, ethically sourced Himalayan herbs, and traditional Kshirpak Vidhi processing.
             </p>

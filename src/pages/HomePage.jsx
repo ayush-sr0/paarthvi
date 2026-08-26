@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import { useCart } from '../context/CartContext';
 import { SEO } from '../components/SEO';
-import { ArrowRight, Star, Heart, ShoppingBag, CheckCircle, ChevronLeft, ChevronRight, Play, Gift, Sparkles, Leaf, Mountain, ShieldCheck, HeartHandshake } from 'lucide-react';
+import { ArrowRight, Star, Heart, ShoppingBag, CheckCircle, ChevronLeft, ChevronRight, Play, Sparkles, Leaf, Mountain, ShieldCheck, HeartHandshake } from 'lucide-react';
 
 export const HomePage = () => {
   const navigate = useNavigate();
@@ -11,8 +11,114 @@ export const HomePage = () => {
 
   const [categories, setCategories] = useState([]);
   const [bestSellers, setBestSellers] = useState([]);
+  const [comboProducts, setComboProducts] = useState([]);
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
+  const comboScrollRef = React.useRef(null);
+
+  const defaultCategoryCards = [
+    {
+      id: 1,
+      name: 'Health Care',
+      slug: 'nutrition-supplements',
+      image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDCb-RgsboX1Akv4b04ivSLHtRXmvJaWjy3bY2LWsJdKDJLYuM1c4Eb9JmjPi651ISnd_zm2pkIbS2bCrZMZALwkwrrm2-QNoiEEB1StYgY8gLiBsPLYDvA2ev94ui-Cs8IW5KK7BkUdThLT8oxKyJiMLfoW9yah7VgFowHGDQFUvqYciLIM6V4Rglt7ezVGK-ZTLb4f4ZbDIz1ZKMzavGgkMsynkp4bVbl5fiD20NuX6YSeuht81QS7A'
+    },
+    {
+      id: 2,
+      name: 'Personal Care',
+      slug: 'personal-care',
+      image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCWnxnpE8wdajXKLcwiFWUz7B-5TiqapQwTxnY0kkPWSy6Mcj7aBjApOwyXwNKsbm_qFW_zeflpYfiOUEqhT4EY0ydhwp2zQjAGq8sHlboShIADMPV63mrMlqf9ht6AHyl74mMjPgnHumtRGFw-B3eTkVtmSFYXqokv6pkYAKwDsRfmA7A6-hQxlLRBOSdF1jV9PVj54mtdp_WDf-e4fa0MrcO0uhfVB9Q6VHeQXs3PaBr25eHXMzhxaw'
+    },
+    {
+      id: 3,
+      name: 'Medicine',
+      slug: 'herbal-wellness',
+      image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBH33w-PXNVmO1ZqPjsi4EcEDwv-WvX7MVXdcCqmn9WgawL2C896vjmujbj6OeInFkgSPganzDbp44cgTdy5tTmGDkJ2_Q5OD1pPKAvguRBnKjRVAjBk8OsKgAFNayCRAc408HdhQ8Q_QiGyxCAttbVUIuwm5PKpljKzSd4keZW16OhOklcKazIWPhIlR5-P87vM3C3aMXBjNZc3mwNKY_4dWBp6rerIA8iqulhMxKE6jCb22vQ9pMTJg'
+    },
+    {
+      id: 4,
+      name: 'Nutraceuticals',
+      slug: 'daily-wellness',
+      image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAtBTO3te9frWis1VqUj7GWYnH-aAdC6ZBZ_42IOKfqa7KvQxcYVMVqqHA60fIy6NQClOJx0wBoKMO9lOxA_d93HGs_ITOMcx6nlwiD-tIffpBXhhbkYA8IP3DFOdFnkAiViZOXA3PAILKPFD9h8O1-3a1BA3tvpLtzTKhhJ5zw_9ZwUjn7q8N6ILI7tMlykM-dkGNKBHuDHbKDM8yvFEv2ugBH-MigsRU1d57XjW66K2uJ5bG9IA8hWA'
+    },
+    {
+      id: 5,
+      name: 'Paridhan',
+      slug: 'mens-wellness',
+      image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCWnxnpE8wdajXKLcwiFWUz7B-5TiqapQwTxnY0kkPWSy6Mcj7aBjApOwyXwNKsbm_qFW_zeflpYfiOUEqhT4EY0ydhwp2zQjAGq8sHlboShIADMPV63mrMlqf9ht6AHyl74mMjPgnHumtRGFw-B3eTkVtmSFYXqokv6pkYAKwDsRfmA7A6-hQxlLRBOSdF1jV9PVj54mtdp_WDf-e4fa0MrcO0uhfVB9Q6VHeQXs3PaBr25eHXMzhxaw'
+    },
+    {
+      id: 6,
+      name: 'Hawan Samagri',
+      slug: 'womens-wellness',
+      image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBTnRYq9N4tNYCBNHtwC-9UKO16ekI_k5V8PyYQl--a4OjeDqHIgZzu5t4Eso_fB3VPqTxe4zl4GxlTl9NXzlji4fR8bO-sKyU8hveO2fFbcP5L-fUT8uoa8xmoo61r_SMjrftYhm5_9tu85Vl7M48XEDWOAWiWm_5oOWo-GudwqC57ggpbLKdDg3y4Xo4CYKOklG1lgeFGD1xnWouleXxJcf-8eKrZbVAZyvWDlUSWt3lfkzdg1z_qOQ'
+    }
+  ];
+
+  const defaultComboProducts = [
+    {
+      id: 101,
+      name: "Patanjali Nutrela Kid's Superfood Combo",
+      slug: "ashwagandha-root-powder",
+      net_qty: "580 g",
+      price: 849.00,
+      mrp: 899.00,
+      main_image: "https://lh3.googleusercontent.com/aida-public/AB6AXuDCb-RgsboX1Akv4b04ivSLHtRXmvJaWjy3bY2LWsJdKDJLYuM1c4Eb9JmjPi651ISnd_zm2pkIbS2bCrZMZALwkwrrm2-QNoiEEB1StYgY8gLiBsPLYDvA2ev94ui-Cs8IW5KK7BkUdThLT8oxKyJiMLfoW9yah7VgFowHGDQFUvqYciLIM6V4Rglt7ezVGK-ZTLb4f4ZbDIz1ZKMzavGgkMsynkp4bVbl5fiD20NuX6YSeuht81QS7A",
+      avg_rating: 4.8,
+      review_count: 14
+    },
+    {
+      id: 102,
+      name: "Patanjali Nutrela Women's Superfood Combo",
+      slug: "kumkumadi-facial-oil",
+      net_qty: "580 g",
+      price: 733.00,
+      mrp: 799.00,
+      main_image: "https://lh3.googleusercontent.com/aida-public/AB6AXuBTnRYq9N4tNYCBNHtwC-9UKO16ekI_k5V8PyYQl--a4OjeDqHIgZzu5t4Eso_fB3VPqTxe4zl4GxlTl9NXzlji4fR8bO-sKyU8hveO2fFbcP5L-fUT8uoa8xmoo61r_SMjrftYhm5_9tu85Vl7M48XEDWOAWiWm_5oOWo-GudwqC57ggpbLKdDg3y4Xo4CYKOklG1lgeFGD1xnWouleXxJcf-8eKrZbVAZyvWDlUSWt3lfkzdg1z_qOQ",
+      avg_rating: 4.9,
+      review_count: 22
+    },
+    {
+      id: 103,
+      name: "Combo- Amla Hair Oil+Kesh Kanti...",
+      slug: "ashwagandha-root-powder",
+      net_qty: "650 g",
+      price: 258.50,
+      mrp: 275.00,
+      main_image: "https://lh3.googleusercontent.com/aida-public/AB6AXuAtBTO3te9frWis1VqUj7GWYnH-aAdC6ZBZ_42IOKfqa7KvQxcYVMVqqHA60fIy6NQClOJx0wBoKMO9lOxA_d93HGs_ITOMcx6nlwiD-tIffpBXhhbkYA8IP3DFOdFnkAiViZOXA3PAILKPFD9h8O1-3a1BA3tvpLtzTKhhJ5zw_9ZwUjn7q8N6ILI7tMlykM-dkGNKBHuDHbKDM8yvFEv2ugBH-MigsRU1d57XjW66K2uJ5bG9IA8hWA",
+      avg_rating: 4.7,
+      review_count: 19
+    },
+    {
+      id: 104,
+      name: "Kesh Kanti Advance Herbal Hair...",
+      slug: "kumkumadi-facial-oil",
+      net_qty: "100 ml",
+      price: 356.00,
+      mrp: 399.00,
+      main_image: "https://lh3.googleusercontent.com/aida-public/AB6AXuCWnxnpE8wdajXKLcwiFWUz7B-5TiqapQwTxnY0kkPWSy6Mcj7aBjApOwyXwNKsbm_qFW_zeflpYfiOUEqhT4EY0ydhwp2zQjAGq8sHlboShIADMPV63mrMlqf9ht6AHyl74mMjPgnHumtRGFw-B3eTkVtmSFYXqokv6pkYAKwDsRfmA7A6-hQxlLRBOSdF1jV9PVj54mtdp_WDf-e4fa0MrcO0uhfVB9Q6VHeQXs3PaBr25eHXMzhxaw",
+      avg_rating: 5.0,
+      review_count: 31
+    },
+    {
+      id: 105,
+      name: "Ashwagandha Nagori & Kesar Rasayana",
+      slug: "ashwagandha-root-powder",
+      net_qty: "250 g",
+      price: 499.00,
+      mrp: 599.00,
+      main_image: "https://lh3.googleusercontent.com/aida-public/AB6AXuBH33w-PXNVmO1ZqPjsi4EcEDwv-WvX7MVXdcCqmn9WgawL2C896vjmujbj6OeInFkgSPganzDbp44cgTdy5tTmGDkJ2_Q5OD1pPKAvguRBnKjRVAjBk8OsKgAFNayCRAc408HdhQ8Q_QiGyxCAttbVUIuwm5PKpljKzSd4keZW16OhOklcKazIWPhIlR5-P87vM3C3aMXBjNZc3mwNKY_4dWBp6rerIA8iqulhMxKE6jCb22vQ9pMTJg",
+      avg_rating: 4.8,
+      review_count: 14
+    }
+  ];
+
+  const scrollCombos = (direction) => {
+    if (comboScrollRef.current) {
+      const scrollAmount = direction === 'left' ? -300 : 300;
+      comboScrollRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+    }
+  };
 
   const [banners, setBanners] = useState([
     {
@@ -61,6 +167,12 @@ export const HomePage = () => {
 
     api.getProducts({ is_bestseller: 1 }).then(data => {
       if (data.success) setBestSellers(data.products || []);
+    });
+
+    api.getProducts().then(data => {
+      if (data.success && data.products && data.products.length > 0) {
+        setComboProducts(data.products);
+      }
     });
 
     api.trackEvent('PAGE_VIEW', '/');
@@ -136,135 +248,151 @@ export const HomePage = () => {
         </div>
       </section>
 
-      {/* Advertising Festive Banner (Reference code.html) */}
-      <section className="px-margin-mobile md:px-margin-desktop">
-        <div className="w-full bg-secondary-container rounded-xl p-8 md:p-12 flex flex-col md:flex-row items-center justify-between relative overflow-hidden border border-outline/20 shadow-sm">
-          <div className="absolute right-0 top-0 w-1/2 h-full opacity-20 pointer-events-none bg-[url('https://images.unsplash.com/photo-1515377905703-c4788e51af15?auto=format&fit=crop&q=80')] bg-cover bg-center"></div>
-          <div className="relative z-10 max-w-lg mb-6 md:mb-0">
-            <span className="font-label text-xs uppercase tracking-widest text-on-secondary-container mb-2 block font-bold">
-              Festive Offer
-            </span>
-            <h2 className="font-display text-2xl md:text-3xl leading-tight text-on-secondary-container mb-3 font-bold">
-              Deepavali Wellness Set
-            </h2>
-            <p className="font-body text-sm text-on-secondary-container/90 mb-6 leading-relaxed">
-              Illuminate your health this season with our curated collection of sacred oils and herbs. Enjoy 20% off for a limited time.
-            </p>
-            <Link
-              to="/shop?sort=bestseller"
-              className="border-2 border-on-secondary-container text-on-secondary-container hover:bg-on-secondary-container hover:text-secondary-container font-label text-xs uppercase font-bold px-6 py-3 rounded-full transition-colors inline-flex items-center gap-2"
+      {/* Category Quick Access Grid (Clean Neutral Surface, No Green Tint) */}
+      <section className="px-margin-mobile md:px-margin-desktop py-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 sm:gap-4">
+          {(categories.length > 0 ? categories : defaultCategoryCards).slice(0, 6).map((cat, idx) => {
+            const defaultMatch = defaultCategoryCards[idx % defaultCategoryCards.length];
+            const title = cat.name || defaultMatch.name;
+            const image = cat.image || cat.main_image || defaultMatch.image;
+            const slug = cat.slug || defaultMatch.slug;
+
+            return (
+              <Link
+                key={cat.id || idx}
+                to={`/shop?category=${slug}`}
+                className="bg-white hover:bg-slate-50 border border-slate-200/80 rounded-2xl p-3 flex flex-col items-center justify-between text-center group transition-all duration-300 shadow-sm hover:shadow-md"
+              >
+                <div className="w-full aspect-square max-w-[110px] rounded-xl overflow-hidden mb-2.5 p-2 flex items-center justify-center bg-slate-50/70 border border-slate-100">
+                  <img
+                    src={image}
+                    alt={title}
+                    className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
+                    onError={(e) => {
+                      e.target.src = defaultMatch.image;
+                    }}
+                  />
+                </div>
+                <span className="font-display font-bold text-xs sm:text-sm text-[#00A651] group-hover:text-emerald-800 line-clamp-1 leading-tight">
+                  {title}
+                </span>
+              </Link>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Save on Combo Orders Product Carousel (Reference Image 2) */}
+      <section className="px-margin-mobile md:px-margin-desktop py-4">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="font-display text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">
+            Save on Combo Orders
+          </h2>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => scrollCombos('left')}
+              className="w-8 h-8 md:w-9 md:h-9 rounded-full bg-[#EAF5EC] text-[#00A651] hover:bg-[#00A651] hover:text-white flex items-center justify-center transition-colors shadow-sm cursor-pointer"
+              aria-label="Previous products"
             >
-              Claim Offer <Gift size={16} />
-            </Link>
+              <ChevronLeft size={18} />
+            </button>
+            <button
+              onClick={() => scrollCombos('right')}
+              className="w-8 h-8 md:w-9 md:h-9 rounded-full bg-[#EAF5EC] text-[#00A651] hover:bg-[#00A651] hover:text-white flex items-center justify-center transition-colors shadow-sm cursor-pointer"
+              aria-label="Next products"
+            >
+              <ChevronRight size={18} />
+            </button>
           </div>
-          <div className="relative z-10 w-48 h-48 md:w-64 md:h-64 rounded-full border-4 border-surface overflow-hidden shadow-lg rotate-3 hover:rotate-0 transition-transform duration-500">
-            <img
-              alt="Wellness Set"
-              className="w-full h-full object-cover"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuAhnbEkvwPmmaWdBDj2CFybQA46jEnjXabzCAabB6oljjU8tTYVQENN4lAt5spkYgwAZR2j-JZfhH4pAnuVtq0yr18aJypvzSgPvvnoFr8klSWAkLbW9OpOA6LlZh7orRUZ6eOnBxw6y58KAy6avGaGlf6oTWjNNvLOPi4lrJzKMHXPfGoIIVlQsJZfnK5iyOsd0YwSF0wGdormMpt6JqkM-DJvTDAgDX-qwuqmOX7YlgJs6OvVK5xzkg"
-            />
-          </div>
+        </div>
+
+        <div
+          ref={comboScrollRef}
+          className="flex gap-4 sm:gap-6 overflow-x-auto scrollbar-none pb-4 pt-1 scroll-smooth"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        >
+          {(comboProducts.length > 0 ? comboProducts : defaultComboProducts).map((product) => {
+            const sellingPrice = product.selling_price || product.price;
+            const mrpPrice = product.mrp;
+            const discountPercent = mrpPrice && mrpPrice > sellingPrice
+              ? Math.round(((mrpPrice - sellingPrice) / mrpPrice) * 100)
+              : null;
+            const isWishlisted = wishlist.includes(product.id);
+
+            return (
+              <div
+                key={product.id}
+                className="w-[240px] sm:w-[270px] flex-shrink-0 bg-white rounded-2xl p-4 border border-slate-100 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group"
+              >
+                <div>
+                  <div className="relative bg-[#F6F8F5] rounded-xl p-3 h-48 flex items-center justify-center mb-3 group-hover:bg-[#F0F4EF] transition-colors">
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        toggleWishlist(product.id);
+                      }}
+                      className={`absolute top-2.5 right-2.5 w-8 h-8 rounded-full bg-white/90 shadow-sm flex items-center justify-center transition-colors ${
+                        isWishlisted ? 'text-[#00A651]' : 'text-slate-400 hover:text-[#00A651]'
+                      }`}
+                      aria-label="Toggle wishlist"
+                    >
+                      <Heart size={16} fill={isWishlisted ? 'currentColor' : 'none'} />
+                    </button>
+                    <img
+                      src={product.main_image || product.image}
+                      alt={product.name}
+                      className="max-h-40 w-auto object-contain mx-auto group-hover:scale-105 transition-transform duration-300"
+                    />
+                  </div>
+
+                  <Link
+                    to={`/product/${product.slug}`}
+                    className="font-display font-bold text-sm text-slate-800 line-clamp-1 block mb-1 group-hover:text-[#00A651] transition-colors"
+                  >
+                    {product.name}
+                  </Link>
+
+                  <span className="text-xs text-slate-400 font-medium block mb-2">
+                    {product.net_qty || '580 g'}
+                  </span>
+
+                  <div className="flex items-center flex-wrap gap-1 mb-2">
+                    <span className="font-bold text-base text-slate-900">
+                      ₹ {sellingPrice}
+                    </span>
+                    {mrpPrice && mrpPrice > sellingPrice && (
+                      <span className="text-xs text-slate-400 line-through ml-1">
+                        M.R.P.: ₹{mrpPrice}
+                      </span>
+                    )}
+                    {discountPercent && (
+                      <span className="bg-[#E8F5E9] text-[#00A651] text-[10px] font-bold px-1.5 py-0.5 rounded ml-1">
+                        {discountPercent}.00% OFF
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1 text-amber-500 text-xs font-bold mb-3">
+                    <Star size={13} fill="currentColor" />
+                    <span>{product.avg_rating ? parseFloat(product.avg_rating).toFixed(1) : '0'}</span>
+                    <span className="text-slate-400 font-normal">({product.review_count || 0})</span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => addToCart(product.default_variant_id || product.id)}
+                  className="w-full bg-[#00A651] hover:bg-[#008c44] text-white font-label font-bold text-xs py-2.5 rounded-full transition-colors flex items-center justify-center gap-1.5 shadow-sm mt-1 cursor-pointer"
+                >
+                  Add to Cart
+                </button>
+              </div>
+            );
+          })}
         </div>
       </section>
 
-      {/* Benefits Infographic (Reference code.html) */}
-      <section className="px-margin-mobile md:px-margin-desktop py-8 bg-surface-container-low border-y border-outline/10">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-          <div className="flex flex-col items-center text-center group">
-            <div className="w-16 h-16 rounded-full bg-primary-container/20 text-primary flex items-center justify-center mb-4 group-hover:bg-primary-container transition-colors duration-300">
-              <Leaf size={28} />
-            </div>
-            <h3 className="font-display text-base font-bold text-on-surface mb-1">100% Organic</h3>
-            <p className="font-body text-xs text-on-surface-variant">Pure, untainted ingredients from nature.</p>
-          </div>
-          <div className="flex flex-col items-center text-center group">
-            <div className="w-16 h-16 rounded-full bg-primary-container/20 text-primary flex items-center justify-center mb-4 group-hover:bg-primary-container transition-colors duration-300">
-              <Mountain size={28} />
-            </div>
-            <h3 className="font-display text-base font-bold text-on-surface mb-1">Himalayan Sourced</h3>
-            <p className="font-body text-xs text-on-surface-variant">Roots and herbs from sacred altitudes.</p>
-          </div>
-          <div className="flex flex-col items-center text-center group">
-            <div className="w-16 h-16 rounded-full bg-primary-container/20 text-primary flex items-center justify-center mb-4 group-hover:bg-primary-container transition-colors duration-300">
-              <HeartHandshake size={28} />
-            </div>
-            <h3 className="font-display text-base font-bold text-on-surface mb-1">Ethically Crafted</h3>
-            <p className="font-body text-xs text-on-surface-variant">Prepared with mindfulness and reverence.</p>
-          </div>
-          <div className="flex flex-col items-center text-center group">
-            <div className="w-16 h-16 rounded-full bg-primary-container/20 text-primary flex items-center justify-center mb-4 group-hover:bg-primary-container transition-colors duration-300">
-              <ShieldCheck size={28} />
-            </div>
-            <h3 className="font-display text-base font-bold text-on-surface mb-1">GMP Certified</h3>
-            <p className="font-body text-xs text-on-surface-variant">Highest standards of quality control.</p>
-          </div>
-        </div>
-      </section>
 
-      {/* Popular Catalog Links - Sacred Offerings (Reference code.html) */}
-      <section className="px-margin-mobile md:px-margin-desktop">
-        <h2 className="font-display text-2xl md:text-3xl text-on-background mb-8 text-center font-bold">
-          Sacred Offerings
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Link
-            to="/shop?category=nutrition-supplements"
-            className="group relative h-64 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 block"
-          >
-            <img
-              alt="Dosha Balancing"
-              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuBTnRYq9N4tNYCBNHtwC-9UKO16ekI_k5V8PyYQl--a4OjeDqHIgZzu5t4Eso_fB3VPqTxe4zl4GxlTl9NXzlji4fR8bO-sKyU8hveO2fFbcP5L-fUT8uoa8xmoo61r_SMjrftYhm5_9tu85Vl7M48XEDWOAWiWm_5oOWo-GudwqC57ggpbLKdDg3y4Xo4CYKOklG1lgeFGD1xnWouleXxJcf-8eKrZbVAZyvWDlUSWt3lfkzdg1z_qOQ"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-surface/90 via-surface/40 to-transparent flex items-end p-6">
-              <div>
-                <h3 className="font-display text-xl font-bold text-primary mb-1">Dosha Balancing</h3>
-                <span className="text-xs text-on-surface-variant font-label uppercase flex items-center gap-1 group-hover:text-secondary transition-colors font-bold">
-                  Explore <ArrowRight size={14} />
-                </span>
-              </div>
-            </div>
-          </Link>
 
-          <Link
-            to="/shop?category=hair-care"
-            className="group relative h-64 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 block"
-          >
-            <img
-              alt="Sacred Oils"
-              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuAtBTO3te9frWis1VqUj7GWYnH-aAdC6ZBZ_42IOKfqa7KvQxcYVMVqqHA60fIy6NQClOJx0wBoKMO9lOxA_d93HGs_ITOMcx6nlwiD-tIffpBXhhbkYA8IP3DFOdFnkAiViZOXA3PAILKPFD9h8O1-3a1BA3tvpLtzTKhhJ5zw_9ZwUjn7q8N6ILI7tMlykM-dkGNKBHuDHbKDM8yvFEv2ugBH-MigsRU1d57XjW66K2uJ5bG9IA8hWA"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-surface/90 via-surface/40 to-transparent flex items-end p-6">
-              <div>
-                <h3 className="font-display text-xl font-bold text-primary mb-1">Sacred Oils</h3>
-                <span className="text-xs text-on-surface-variant font-label uppercase flex items-center gap-1 group-hover:text-secondary transition-colors font-bold">
-                  Explore <ArrowRight size={14} />
-                </span>
-              </div>
-            </div>
-          </Link>
-
-          <Link
-            to="/shop?category=herbal-wellness"
-            className="group relative h-64 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 block"
-          >
-            <img
-              alt="Herbal Apothecary"
-              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuBH33w-PXNVmO1ZqPjsi4EcEDwv-WvX7MVXdcCqmn9WgawL2C896vjmujbj6OeInFkgSPganzDbp44cgTdy5tTmGDkJ2_Q5OD1pPKAvguRBnKjRVAjBk8OsKgAFNayCRAc408HdhQ8Q_QiGyxCAttbVUIuwm5PKpljKzSd4keZW16OhOklcKazIWPhIlR5-P87vM3C3aMXBjNZc3mwNKY_4dWBp6rerIA8iqulhMxKE6jCb22vQ9pMTJg"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-surface/90 via-surface/40 to-transparent flex items-end p-6">
-              <div>
-                <h3 className="font-display text-xl font-bold text-primary mb-1">Herbal Apothecary</h3>
-                <span className="text-xs text-on-surface-variant font-label uppercase flex items-center gap-1 group-hover:text-secondary transition-colors font-bold">
-                  Explore <ArrowRight size={14} />
-                </span>
-              </div>
-            </div>
-          </Link>
-        </div>
-      </section>
 
       {/* Trending & Sale Products (Reference code.html) */}
       <section className="px-margin-mobile md:px-margin-desktop">

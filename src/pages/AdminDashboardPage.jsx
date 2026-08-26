@@ -85,9 +85,17 @@ export const AdminDashboardPage = () => {
     warnings: '',
     storage_info: '',
     net_qty: '200 ml',
-    manufacturer_info: 'Parthvi Herbal Formulations Pvt Ltd',
-    image_url: 'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&q=80&w=800',
+    manufacturer_info: 'Paarthvi Herbal Formulations Pvt Ltd',
+    image_url: '/shop/placeholder.jpg',
   });
+
+  // Product Edit Modal State
+  const [showEditProductModal, setShowEditProductModal] = useState(false);
+  const [editProd, setEditProd] = useState(null);
+  const [editProdImages, setEditProdImages] = useState([]);
+  const [newImageUrl, setNewImageUrl] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
+
 
   useEffect(() => {
     if (activeTab === 'overview') {
@@ -173,6 +181,80 @@ export const AdminDashboardPage = () => {
       });
     }
   };
+
+  const handleEditProduct = async (product) => {
+    setEditProd({ ...product });
+    setShowEditProductModal(true);
+    const imgData = await api.getProductImages(product.id);
+    setEditProdImages(imgData.success ? imgData.images : []);
+  };
+
+  const handleUpdateProduct = async (e) => {
+    e.preventDefault();
+    setEditSaving(true);
+    const res = await api.updateProduct(editProd.id, {
+      name: editProd.name,
+      slug: editProd.slug,
+      category_id: editProd.category_id,
+      short_desc: editProd.short_desc,
+      description: editProd.description,
+      mrp: parseFloat(editProd.mrp),
+      selling_price: parseFloat(editProd.selling_price),
+      is_featured: editProd.is_featured ? 1 : 0,
+      is_bestseller: editProd.is_bestseller ? 1 : 0,
+      is_new: editProd.is_new ? 1 : 0,
+      status: editProd.status,
+      ingredients: editProd.ingredients,
+      key_ingredients: editProd.key_ingredients,
+      benefits: editProd.benefits,
+      usage_directions: editProd.usage_directions,
+      warnings: editProd.warnings,
+      storage_info: editProd.storage_info,
+      net_qty: editProd.net_qty,
+      manufacturer_info: editProd.manufacturer_info,
+    });
+    setEditSaving(false);
+    if (res.success) {
+      setShowEditProductModal(false);
+      api.getAdminProducts().then(data => {
+        if (data.success) setAdminProducts(data.products || []);
+      });
+    } else {
+      alert(`Update failed: ${res.error}`);
+    }
+  };
+
+  const handleDeleteProduct = async (product) => {
+    if (!confirm(`Delete "${product.name}"? This will also remove all variants and images.`)) return;
+    const res = await api.deleteProduct(product.id);
+    if (res.success) {
+      api.getAdminProducts().then(data => {
+        if (data.success) setAdminProducts(data.products || []);
+      });
+    } else {
+      alert(`Delete failed: ${res.error}`);
+    }
+  };
+
+  const handleAddImage = async () => {
+    if (!newImageUrl.trim() || !editProd) return;
+    const res = await api.addProductImage(editProd.id, newImageUrl.trim());
+    if (res.success) {
+      setNewImageUrl('');
+      const imgData = await api.getProductImages(editProd.id);
+      setEditProdImages(imgData.success ? imgData.images : []);
+    } else {
+      alert(`Failed to add image: ${res.error}`);
+    }
+  };
+
+  const handleDeleteImage = async (imageId) => {
+    if (!confirm('Remove this image from the gallery?')) return;
+    await api.deleteProductImage(editProd.id, imageId);
+    const imgData = await api.getProductImages(editProd.id);
+    setEditProdImages(imgData.success ? imgData.images : []);
+  };
+
 
   const handleStockAdjustment = async (variantId, currentStock) => {
     const newStockStr = prompt('Enter new stock quantity:', currentStock);
@@ -483,19 +565,171 @@ export const AdminDashboardPage = () => {
             </button>
           </div>
 
+          {/* Edit Product Modal */}
+          {showEditProductModal && editProd && (
+            <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+              <div className="bg-surface rounded-2xl w-full max-w-2xl p-6 space-y-5 shadow-2xl border border-gold-leaf relative my-4">
+                <button onClick={() => setShowEditProductModal(false)} className="absolute top-4 right-4"><X size={20} /></button>
+                <h3 className="font-display text-lg font-bold text-primary flex items-center gap-2"><Edit size={18} /> Edit Product</h3>
+
+                <form onSubmit={handleUpdateProduct} className="space-y-4 font-body text-xs">
+                  {/* Basic Info */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-semibold mb-1 text-on-surface">Product Name *</label>
+                      <input type="text" value={editProd.name || ''} onChange={e => setEditProd(p => ({ ...p, name: e.target.value }))} className="w-full px-3 py-2 bg-surface-container border border-outline/30 rounded-lg focus:border-gold-leaf outline-none" required />
+                    </div>
+                    <div>
+                      <label className="block font-semibold mb-1 text-on-surface">URL Slug *</label>
+                      <input type="text" value={editProd.slug || ''} onChange={e => setEditProd(p => ({ ...p, slug: e.target.value }))} className="w-full px-3 py-2 bg-surface-container border border-outline/30 rounded-lg focus:border-gold-leaf outline-none" required />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold mb-1 text-on-surface">Short Description</label>
+                    <input type="text" value={editProd.short_desc || ''} onChange={e => setEditProd(p => ({ ...p, short_desc: e.target.value }))} className="w-full px-3 py-2 bg-surface-container border border-outline/30 rounded-lg focus:border-gold-leaf outline-none" />
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div>
+                      <label className="block font-semibold mb-1">MRP (₹)</label>
+                      <input type="number" value={editProd.mrp || ''} onChange={e => setEditProd(p => ({ ...p, mrp: e.target.value }))} className="w-full px-3 py-2 bg-surface-container border border-outline/30 rounded-lg focus:border-gold-leaf outline-none" />
+                    </div>
+                    <div>
+                      <label className="block font-semibold mb-1">Price (₹)</label>
+                      <input type="number" value={editProd.selling_price || ''} onChange={e => setEditProd(p => ({ ...p, selling_price: e.target.value }))} className="w-full px-3 py-2 bg-surface-container border border-outline/30 rounded-lg focus:border-gold-leaf outline-none" />
+                    </div>
+                    <div>
+                      <label className="block font-semibold mb-1">Status</label>
+                      <select value={editProd.status || 'PUBLISHED'} onChange={e => setEditProd(p => ({ ...p, status: e.target.value }))} className="w-full px-3 py-2 bg-surface-container border border-outline/30 rounded-lg focus:border-gold-leaf outline-none">
+                        <option value="PUBLISHED">Published</option>
+                        <option value="DRAFT">Draft</option>
+                        <option value="ARCHIVED">Archived</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block font-semibold mb-1">Net Qty</label>
+                      <input type="text" value={editProd.net_qty || ''} onChange={e => setEditProd(p => ({ ...p, net_qty: e.target.value }))} className="w-full px-3 py-2 bg-surface-container border border-outline/30 rounded-lg focus:border-gold-leaf outline-none" />
+                    </div>
+                  </div>
+
+                  {/* Flags */}
+                  <div className="flex flex-wrap gap-4">
+                    {[['is_featured', 'Featured'], ['is_bestseller', 'Best Seller'], ['is_new', 'New Arrival']].map(([field, label]) => (
+                      <label key={field} className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" checked={!!editProd[field]} onChange={e => setEditProd(p => ({ ...p, [field]: e.target.checked ? 1 : 0 }))} className="accent-gold-leaf w-4 h-4" />
+                        <span className="font-semibold text-on-surface">{label}</span>
+                      </label>
+                    ))}
+                  </div>
+
+                  {/* Detailed Fields */}
+                  {[['description', 'Full Description', 3], ['ingredients', 'Ingredients (full list)', 2], ['key_ingredients', 'Key Ingredients', 1], ['benefits', 'Benefits', 2], ['usage_directions', 'Usage Directions', 2], ['warnings', 'Warnings & Precautions', 1], ['storage_info', 'Storage Info', 1], ['manufacturer_info', 'Manufacturer Info', 1]].map(([field, label, rows]) => (
+                    <div key={field}>
+                      <label className="block font-semibold mb-1 text-on-surface">{label}</label>
+                      <textarea
+                        rows={rows}
+                        value={editProd[field] || ''}
+                        onChange={e => setEditProd(p => ({ ...p, [field]: e.target.value }))}
+                        className="w-full px-3 py-2 bg-surface-container border border-outline/30 rounded-lg focus:border-gold-leaf outline-none resize-none"
+                      />
+                    </div>
+                  ))}
+
+                  {/* Image Gallery Manager */}
+                  <div className="border-t border-outline/10 pt-4 space-y-3">
+                    <h4 className="font-display text-sm font-bold text-primary flex items-center gap-2"><ImageIcon size={16} /> Image Gallery</h4>
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                      {editProdImages.map(img => (
+                        <div key={img.id} className="relative group">
+                          <img
+                            src={img.image_url}
+                            alt=""
+                            className="w-full h-20 object-cover rounded-lg border border-outline/20"
+                            onError={e => { e.target.style.background = '#1a1a1a'; }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteImage(img.id)}
+                            className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <X size={12} />
+                          </button>
+                          <span className="absolute bottom-0 left-0 right-0 text-[9px] text-center bg-black/60 text-white rounded-b-lg px-1 py-0.5 truncate">#{img.display_order}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newImageUrl}
+                        onChange={e => setNewImageUrl(e.target.value)}
+                        placeholder="/shop/product/image.jpg or https://..."
+                        className="flex-1 px-3 py-2 bg-surface-container border border-outline/30 rounded-lg focus:border-gold-leaf outline-none text-xs"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddImage}
+                        className="bg-gold-leaf text-primary font-label text-xs font-bold px-4 py-2 rounded-lg hover:opacity-90 whitespace-nowrap"
+                      >
+                        + Add Image
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                    <button type="submit" disabled={editSaving} className="flex-1 bg-primary text-on-primary font-label text-xs font-bold uppercase py-3 rounded-full hover:bg-primary-container disabled:opacity-50">
+                      {editSaving ? 'Saving...' : 'Save Changes'}
+                    </button>
+                    <button type="button" onClick={() => setShowEditProductModal(false)} className="px-6 border border-outline/30 rounded-full font-label text-xs font-bold">
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Products Table */}
           <div className="bg-surface rounded-2xl border border-outline/20 overflow-hidden divide-y divide-outline/10">
             {adminProducts.map((p) => (
               <div key={p.id} className="p-4 flex items-center justify-between gap-4 text-xs font-body">
-                <div>
-                  <h4 className="font-bold text-on-surface font-display text-sm">{p.name}</h4>
-                  <p className="text-on-surface-variant">Category: {p.category_name} | Total Stock: {p.total_stock || 0}</p>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="font-bold text-on-surface font-display text-sm">{p.name}</h4>
+                    {p.is_bestseller === 1 && <span className="bg-gold-leaf/20 text-gold-leaf font-label text-[10px] font-bold uppercase px-2 py-0.5 rounded">Bestseller</span>}
+                    {p.is_featured === 1 && <span className="bg-primary/10 text-primary font-label text-[10px] font-bold uppercase px-2 py-0.5 rounded">Featured</span>}
+                    {p.is_new === 1 && <span className="bg-green-500/10 text-green-500 font-label text-[10px] font-bold uppercase px-2 py-0.5 rounded">New</span>}
+                    <span className={`font-label text-[10px] font-bold uppercase px-2 py-0.5 rounded ${p.status === 'PUBLISHED' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-outline/20 text-on-surface-variant'}`}>{p.status}</span>
+                  </div>
+                  <p className="text-on-surface-variant mt-0.5">
+                    {p.category_name} · Stock: {p.total_stock ?? 0} · SKU range: {p.id}
+                  </p>
                 </div>
-                <span className="font-label font-bold text-primary">₹{p.selling_price}</span>
+                <div className="flex items-center gap-3 shrink-0">
+                  <div className="text-right">
+                    <span className="font-label font-bold text-primary text-sm block">₹{p.selling_price}</span>
+                    {p.mrp > p.selling_price && <span className="text-on-surface-variant line-through text-[11px]">₹{p.mrp}</span>}
+                  </div>
+                  <button
+                    onClick={() => handleEditProduct(p)}
+                    className="border border-outline/30 bg-surface-container px-3 py-1.5 rounded-lg text-[11px] font-label font-bold uppercase hover:border-gold-leaf hover:text-primary transition-colors flex items-center gap-1"
+                  >
+                    <Edit size={12} /> Edit
+                  </button>
+                  <button
+                    onClick={() => handleDeleteProduct(p)}
+                    className="border border-red-500/30 bg-red-500/5 text-red-500 px-3 py-1.5 rounded-lg text-[11px] font-label font-bold uppercase hover:bg-red-500/10 transition-colors flex items-center gap-1"
+                  >
+                    <Trash2 size={12} /> Delete
+                  </button>
+                </div>
               </div>
             ))}
           </div>
         </div>
       )}
+
 
       {/* Tab 4: Inventory & FEFO */}
       {activeTab === 'inventory' && (

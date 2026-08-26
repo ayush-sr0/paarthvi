@@ -25,7 +25,7 @@ const SYNONYM_MAP = {
 // GET all categories
 router.get('/categories', async (req, res, next) => {
   try {
-    const categories = await query('SELECT * FROM categories WHERE active = 1 ORDER BY display_order ASC');
+    const categories = await query('SELECT * FROM categories WHERE active = TRUE ORDER BY display_order ASC');
     res.json({ success: true, categories });
   } catch (err) {
     next(err);
@@ -48,28 +48,29 @@ router.get('/', async (req, res, next) => {
     `;
 
     const params = [];
+    let paramIdx = 1;
 
     if (category) {
-      sql += ` AND c.slug = ?`;
+      sql += ` AND c.slug = $${paramIdx++}`;
       params.push(category);
     }
 
     if (min_price) {
-      sql += ` AND p.selling_price >= ?`;
+      sql += ` AND p.selling_price >= $${paramIdx++}`;
       params.push(parseFloat(min_price));
     }
 
     if (max_price) {
-      sql += ` AND p.selling_price <= ?`;
+      sql += ` AND p.selling_price <= $${paramIdx++}`;
       params.push(parseFloat(max_price));
     }
 
     if (is_featured === '1') {
-      sql += ` AND p.is_featured = 1`;
+      sql += ` AND p.is_featured = TRUE`;
     }
 
     if (is_bestseller === '1') {
-      sql += ` AND p.is_bestseller = 1`;
+      sql += ` AND p.is_bestseller = TRUE`;
     }
 
     if (search) {
@@ -77,9 +78,10 @@ router.get('/', async (req, res, next) => {
       if (SYNONYM_MAP[searchTerm]) {
         searchTerm = SYNONYM_MAP[searchTerm];
       }
-      sql += ` AND (LOWER(p.name) LIKE ? OR LOWER(p.description) LIKE ? OR LOWER(p.ingredients) LIKE ? OR LOWER(p.key_ingredients) LIKE ?)`;
       const queryPattern = `%${searchTerm}%`;
+      sql += ` AND (LOWER(p.name) LIKE $${paramIdx} OR LOWER(p.description) LIKE $${paramIdx + 1} OR LOWER(p.ingredients) LIKE $${paramIdx + 2} OR LOWER(p.key_ingredients) LIKE $${paramIdx + 3})`;
       params.push(queryPattern, queryPattern, queryPattern, queryPattern);
+      paramIdx += 4;
     }
 
     // Sort order
@@ -128,7 +130,7 @@ router.get('/search/suggest', async (req, res, next) => {
               (SELECT image_url FROM product_images WHERE product_id = p.id LIMIT 1) as main_image
        FROM products p
        JOIN categories c ON p.category_id = c.id
-       WHERE p.status = 'PUBLISHED' AND (LOWER(p.name) LIKE ? OR LOWER(p.key_ingredients) LIKE ?)
+       WHERE p.status = 'PUBLISHED' AND (LOWER(p.name) LIKE $1 OR LOWER(p.key_ingredients) LIKE $2)
        LIMIT 6`,
       [`%${searchKey}%`, `%${searchKey}%`]
     );
@@ -137,7 +139,7 @@ router.get('/search/suggest', async (req, res, next) => {
     if (session_id) {
       await run(
         `INSERT INTO analytics_events (event_name, session_id, page, metadata_json)
-         VALUES ('SEARCH', ?, '/search', ?)`,
+         VALUES ('SEARCH', $1, '/search', $2)`,
         [session_id, JSON.stringify({ query: q, results_count: results.length })]
       );
     }
@@ -155,7 +157,7 @@ router.get('/:slug', async (req, res, next) => {
       `SELECT p.*, c.name as category_name, c.slug as category_slug
        FROM products p
        JOIN categories c ON p.category_id = c.id
-       WHERE p.slug = ? AND p.status = 'PUBLISHED'`,
+       WHERE p.slug = $1 AND p.status = 'PUBLISHED'`,
       [req.params.slug]
     );
 
@@ -163,23 +165,23 @@ router.get('/:slug', async (req, res, next) => {
       return res.status(404).json({ success: false, error: 'Product not found' });
     }
 
-    const images = await query('SELECT * FROM product_images WHERE product_id = ? ORDER BY display_order ASC', [product.id]);
+    const images = await query('SELECT * FROM product_images WHERE product_id = $1 ORDER BY display_order ASC', [product.id]);
     const variants = await query(
       `SELECT v.*, i.available_stock, i.reserved_stock
        FROM product_variants v
        LEFT JOIN inventory i ON v.id = i.variant_id
-       WHERE v.product_id = ?`,
+       WHERE v.product_id = $1`,
       [product.id]
     );
 
     const reviews = await query(
-      `SELECT * FROM reviews WHERE product_id = ? AND status = 'APPROVED' ORDER BY created_at DESC`,
+      `SELECT * FROM reviews WHERE product_id = $1 AND status = 'APPROVED' ORDER BY created_at DESC`,
       [product.id]
     );
 
     const ratingSummary = await get(
       `SELECT AVG(rating) as avg_rating, COUNT(id) as total_reviews
-       FROM reviews WHERE product_id = ? AND status = 'APPROVED'`,
+       FROM reviews WHERE product_id = $1 AND status = 'APPROVED'`,
       [product.id]
     );
 
@@ -187,7 +189,7 @@ router.get('/:slug', async (req, res, next) => {
       `SELECT p.id, p.name, p.slug, p.mrp, p.selling_price,
               (SELECT image_url FROM product_images WHERE product_id = p.id LIMIT 1) as main_image
        FROM products p
-       WHERE p.category_id = ? AND p.id != ? AND p.status = 'PUBLISHED'
+       WHERE p.category_id = $1 AND p.id != $2 AND p.status = 'PUBLISHED'
        LIMIT 4`,
       [product.category_id, product.id]
     );

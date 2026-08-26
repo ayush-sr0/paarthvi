@@ -6,7 +6,7 @@ const router = express.Router();
 
 // =================== Customer-facing endpoints ===================
 
-// POST /api/support/tickets — Create a new support ticket
+// POST /api/support/tickets
 router.post('/tickets', authenticateToken, async (req, res, next) => {
   try {
     const { subject, category, message, order_id, name, email } = req.body;
@@ -27,14 +27,13 @@ router.post('/tickets', authenticateToken, async (req, res, next) => {
 
     const result = await run(
       `INSERT INTO support_tickets (ticket_code, user_id, user_name, user_email, order_id, category, subject)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
       [ticketCode, userId, userName, userEmail, order_id || null, category, subject]
     );
 
-    // Insert initial message
     await run(
       `INSERT INTO ticket_messages (ticket_id, sender_type, sender_name, message)
-       VALUES (?, 'CUSTOMER', ?, ?)`,
+       VALUES ($1, 'CUSTOMER', $2, $3)`,
       [result.lastID, userName, message]
     );
 
@@ -49,17 +48,17 @@ router.post('/tickets', authenticateToken, async (req, res, next) => {
   }
 });
 
-// GET /api/support/tickets — List user's tickets
+// GET /api/support/tickets
 router.get('/tickets', requireAuth, async (req, res, next) => {
   try {
     const tickets = await query(
-      `SELECT * FROM support_tickets WHERE user_id = ? ORDER BY updated_at DESC`,
+      `SELECT * FROM support_tickets WHERE user_id = $1 ORDER BY updated_at DESC`,
       [req.user.id]
     );
 
     for (const ticket of tickets) {
       const msgCount = await get(
-        'SELECT COUNT(id) as count FROM ticket_messages WHERE ticket_id = ?',
+        'SELECT COUNT(id) as count FROM ticket_messages WHERE ticket_id = $1',
         [ticket.id]
       );
       ticket.message_count = msgCount.count || 0;
@@ -71,11 +70,11 @@ router.get('/tickets', requireAuth, async (req, res, next) => {
   }
 });
 
-// GET /api/support/tickets/:id — Get ticket with full message thread
+// GET /api/support/tickets/:id
 router.get('/tickets/:id', requireAuth, async (req, res, next) => {
   try {
     const ticket = await get(
-      'SELECT * FROM support_tickets WHERE id = ? AND user_id = ?',
+      'SELECT * FROM support_tickets WHERE id = $1 AND user_id = $2',
       [req.params.id, req.user.id]
     );
 
@@ -84,7 +83,7 @@ router.get('/tickets/:id', requireAuth, async (req, res, next) => {
     }
 
     const messages = await query(
-      'SELECT * FROM ticket_messages WHERE ticket_id = ? ORDER BY created_at ASC',
+      'SELECT * FROM ticket_messages WHERE ticket_id = $1 ORDER BY created_at ASC',
       [ticket.id]
     );
 
@@ -94,7 +93,7 @@ router.get('/tickets/:id', requireAuth, async (req, res, next) => {
   }
 });
 
-// POST /api/support/tickets/:id/message — Customer adds message to ticket
+// POST /api/support/tickets/:id/message
 router.post('/tickets/:id/message', requireAuth, async (req, res, next) => {
   try {
     const { message } = req.body;
@@ -103,7 +102,7 @@ router.post('/tickets/:id/message', requireAuth, async (req, res, next) => {
     }
 
     const ticket = await get(
-      'SELECT * FROM support_tickets WHERE id = ? AND user_id = ?',
+      'SELECT * FROM support_tickets WHERE id = $1 AND user_id = $2',
       [req.params.id, req.user.id]
     );
 
@@ -113,12 +112,12 @@ router.post('/tickets/:id/message', requireAuth, async (req, res, next) => {
 
     await run(
       `INSERT INTO ticket_messages (ticket_id, sender_type, sender_name, message)
-       VALUES (?, 'CUSTOMER', ?, ?)`,
+       VALUES ($1, 'CUSTOMER', $2, $3)`,
       [ticket.id, req.user.name, message]
     );
 
     await run(
-      "UPDATE support_tickets SET status = 'OPEN', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+      "UPDATE support_tickets SET status = 'OPEN', updated_at = NOW() WHERE id = $1",
       [ticket.id]
     );
 
@@ -130,33 +129,34 @@ router.post('/tickets/:id/message', requireAuth, async (req, res, next) => {
 
 // =================== Admin endpoints ===================
 
-// GET /api/support/admin/tickets — List all tickets with filters
+// GET /api/support/admin/tickets
 router.get('/admin/tickets', requireAuth, requireRole(['SUPPORT_MANAGER', 'ORDER_MANAGER']), async (req, res, next) => {
   try {
     const { status, priority, category } = req.query;
     let sql = 'SELECT * FROM support_tickets WHERE 1=1';
     const params = [];
+    let paramIdx = 1;
 
     if (status) {
-      sql += ' AND status = ?';
+      sql += ` AND status = $${paramIdx++}`;
       params.push(status);
     }
     if (priority) {
-      sql += ' AND priority = ?';
+      sql += ` AND priority = $${paramIdx++}`;
       params.push(priority);
     }
     if (category) {
-      sql += ' AND category = ?';
+      sql += ` AND category = $${paramIdx++}`;
       params.push(category);
     }
 
-    sql += ' ORDER BY CASE priority WHEN \'URGENT\' THEN 1 WHEN \'HIGH\' THEN 2 WHEN \'MEDIUM\' THEN 3 ELSE 4 END, updated_at DESC';
+    sql += ` ORDER BY CASE priority WHEN 'URGENT' THEN 1 WHEN 'HIGH' THEN 2 WHEN 'MEDIUM' THEN 3 ELSE 4 END, updated_at DESC`;
 
     const tickets = await query(sql, params);
 
     for (const ticket of tickets) {
       const msgCount = await get(
-        'SELECT COUNT(id) as count FROM ticket_messages WHERE ticket_id = ?',
+        'SELECT COUNT(id) as count FROM ticket_messages WHERE ticket_id = $1',
         [ticket.id]
       );
       ticket.message_count = msgCount.count || 0;
@@ -168,16 +168,16 @@ router.get('/admin/tickets', requireAuth, requireRole(['SUPPORT_MANAGER', 'ORDER
   }
 });
 
-// GET /api/support/admin/tickets/:id — Admin get ticket detail
+// GET /api/support/admin/tickets/:id
 router.get('/admin/tickets/:id', requireAuth, requireRole(['SUPPORT_MANAGER', 'ORDER_MANAGER']), async (req, res, next) => {
   try {
-    const ticket = await get('SELECT * FROM support_tickets WHERE id = ?', [req.params.id]);
+    const ticket = await get('SELECT * FROM support_tickets WHERE id = $1', [req.params.id]);
     if (!ticket) {
       return res.status(404).json({ success: false, error: 'Ticket not found' });
     }
 
     const messages = await query(
-      'SELECT * FROM ticket_messages WHERE ticket_id = ? ORDER BY created_at ASC',
+      'SELECT * FROM ticket_messages WHERE ticket_id = $1 ORDER BY created_at ASC',
       [ticket.id]
     );
 
@@ -187,11 +187,11 @@ router.get('/admin/tickets/:id', requireAuth, requireRole(['SUPPORT_MANAGER', 'O
   }
 });
 
-// PUT /api/support/admin/tickets/:id — Admin update ticket status/priority
+// PUT /api/support/admin/tickets/:id
 router.put('/admin/tickets/:id', requireAuth, requireRole(['SUPPORT_MANAGER']), async (req, res, next) => {
   try {
     const { status, priority } = req.body;
-    const ticket = await get('SELECT * FROM support_tickets WHERE id = ?', [req.params.id]);
+    const ticket = await get('SELECT * FROM support_tickets WHERE id = $1', [req.params.id]);
 
     if (!ticket) {
       return res.status(404).json({ success: false, error: 'Ticket not found' });
@@ -201,7 +201,7 @@ router.put('/admin/tickets/:id', requireAuth, requireRole(['SUPPORT_MANAGER']), 
     const newPriority = priority || ticket.priority;
 
     await run(
-      'UPDATE support_tickets SET status = ?, priority = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      'UPDATE support_tickets SET status = $1, priority = $2, updated_at = NOW() WHERE id = $3',
       [newStatus, newPriority, ticket.id]
     );
 
@@ -211,7 +211,7 @@ router.put('/admin/tickets/:id', requireAuth, requireRole(['SUPPORT_MANAGER']), 
   }
 });
 
-// POST /api/support/admin/tickets/:id/reply — Admin reply to ticket
+// POST /api/support/admin/tickets/:id/reply
 router.post('/admin/tickets/:id/reply', requireAuth, requireRole(['SUPPORT_MANAGER', 'ORDER_MANAGER']), async (req, res, next) => {
   try {
     const { message } = req.body;
@@ -219,19 +219,19 @@ router.post('/admin/tickets/:id/reply', requireAuth, requireRole(['SUPPORT_MANAG
       return res.status(400).json({ success: false, error: 'Reply message is required' });
     }
 
-    const ticket = await get('SELECT * FROM support_tickets WHERE id = ?', [req.params.id]);
+    const ticket = await get('SELECT * FROM support_tickets WHERE id = $1', [req.params.id]);
     if (!ticket) {
       return res.status(404).json({ success: false, error: 'Ticket not found' });
     }
 
     await run(
       `INSERT INTO ticket_messages (ticket_id, sender_type, sender_name, message)
-       VALUES (?, 'SUPPORT', ?, ?)`,
+       VALUES ($1, 'SUPPORT', $2, $3)`,
       [ticket.id, req.user.name || 'Support Team', message]
     );
 
     await run(
-      "UPDATE support_tickets SET status = 'IN_PROGRESS', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+      "UPDATE support_tickets SET status = 'IN_PROGRESS', updated_at = NOW() WHERE id = $1",
       [ticket.id]
     );
 
@@ -241,24 +241,23 @@ router.post('/admin/tickets/:id/reply', requireAuth, requireRole(['SUPPORT_MANAG
   }
 });
 
-// PUT /api/support/admin/tickets/:id/assign — Admin assign ticket to staff agent
+// PUT /api/support/admin/tickets/:id/assign
 router.put('/admin/tickets/:id/assign', requireAuth, requireRole(['SUPPORT_MANAGER']), async (req, res, next) => {
   try {
     const { assigned_to } = req.body;
-    const ticket = await get('SELECT * FROM support_tickets WHERE id = ?', [req.params.id]);
+    const ticket = await get('SELECT * FROM support_tickets WHERE id = $1', [req.params.id]);
     if (!ticket) {
       return res.status(404).json({ success: false, error: 'Ticket not found' });
     }
 
     await run(
-      'UPDATE support_tickets SET updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      'UPDATE support_tickets SET updated_at = NOW() WHERE id = $1',
       [ticket.id]
     );
 
-    // Record system message in thread
     await run(
       `INSERT INTO ticket_messages (ticket_id, sender_type, sender_name, message)
-       VALUES (?, 'SUPPORT', 'System', ?)`,
+       VALUES ($1, 'SUPPORT', 'System', $2)`,
       [ticket.id, `Ticket assigned to ${assigned_to || req.user.name}`]
     );
 

@@ -4,7 +4,7 @@ import { requireAuth, authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// POST /api/reviews — Submit a review (requires auth, checks verified purchase)
+// POST /api/reviews
 router.post('/', requireAuth, async (req, res, next) => {
   try {
     const { product_id, rating, review_text } = req.body;
@@ -17,28 +17,26 @@ router.post('/', requireAuth, async (req, res, next) => {
       return res.status(400).json({ success: false, error: 'Rating must be between 1 and 5' });
     }
 
-    // Check if user already reviewed this product
     const existingReview = await get(
-      'SELECT id FROM reviews WHERE product_id = ? AND user_id = ?',
+      'SELECT id FROM reviews WHERE product_id = $1 AND user_id = $2',
       [product_id, req.user.id]
     );
     if (existingReview) {
       return res.status(400).json({ success: false, error: 'You have already reviewed this product' });
     }
 
-    // Check for verified purchase: does the user have a DELIVERED order containing this product?
     const purchaseCheck = await get(
       `SELECT oi.id FROM order_items oi
        JOIN orders o ON oi.order_id = o.id
-       WHERE o.user_id = ? AND oi.product_id = ? AND o.status = 'DELIVERED'
+       WHERE o.user_id = $1 AND oi.product_id = $2 AND o.status = 'DELIVERED'
        LIMIT 1`,
       [req.user.id, product_id]
     );
-    const isVerifiedPurchase = purchaseCheck ? 1 : 0;
+    const isVerifiedPurchase = !!purchaseCheck;
 
     const result = await run(
       `INSERT INTO reviews (product_id, user_id, user_name, rating, review_text, verified_purchase, status)
-       VALUES (?, ?, ?, ?, ?, ?, 'PENDING')`,
+       VALUES ($1, $2, $3, $4, $5, $6, 'PENDING') RETURNING id`,
       [product_id, req.user.id, req.user.name, rating, review_text, isVerifiedPurchase]
     );
 
@@ -53,20 +51,20 @@ router.post('/', requireAuth, async (req, res, next) => {
   }
 });
 
-// GET /api/reviews/:productId — Get approved reviews for a product
+// GET /api/reviews/:productId
 router.get('/:productId', async (req, res, next) => {
   try {
     const reviews = await query(
       `SELECT id, user_name, rating, review_text, verified_purchase, created_at
        FROM reviews
-       WHERE product_id = ? AND status = 'APPROVED'
+       WHERE product_id = $1 AND status = 'APPROVED'
        ORDER BY created_at DESC`,
       [req.params.productId]
     );
 
     const summary = await get(
       `SELECT AVG(rating) as avg_rating, COUNT(id) as total_reviews
-       FROM reviews WHERE product_id = ? AND status = 'APPROVED'`,
+       FROM reviews WHERE product_id = $1 AND status = 'APPROVED'`,
       [req.params.productId]
     );
 

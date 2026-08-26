@@ -4,12 +4,11 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// Helper to log admin actions in audit_logs
 const logAuditAction = async (req, action, entity, entity_id, prev_val = null, new_val = null) => {
   try {
     await run(
       `INSERT INTO audit_logs (admin_id, admin_email, action, entity, entity_id, prev_value_json, new_value_json)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [
         req.user?.id || 0,
         req.user?.email || 'admin@parthvi.com',
@@ -27,17 +26,15 @@ const logAuditAction = async (req, action, entity, entity_id, prev_val = null, n
 
 // =================== CMS Banners ===================
 
-// GET /api/cms/banners — Public endpoint to get active banners for storefront
 router.get('/banners', async (req, res, next) => {
   try {
-    const banners = await query('SELECT * FROM cms_banners WHERE active = 1 ORDER BY display_order ASC, id DESC');
+    const banners = await query('SELECT * FROM cms_banners WHERE active = TRUE ORDER BY display_order ASC, id DESC');
     res.json({ success: true, banners });
   } catch (err) {
     next(err);
   }
 });
 
-// GET /api/cms/admin/banners — Admin endpoint to list all banners (including inactive)
 router.get('/admin/banners', requireAuth, requireRole(['SUPER_ADMIN', 'CONTENT_MANAGER']), async (req, res, next) => {
   try {
     const banners = await query('SELECT * FROM cms_banners ORDER BY display_order ASC, id DESC');
@@ -47,7 +44,6 @@ router.get('/admin/banners', requireAuth, requireRole(['SUPER_ADMIN', 'CONTENT_M
   }
 });
 
-// POST /api/cms/banners — Admin create banner
 router.post('/banners', requireAuth, requireRole(['SUPER_ADMIN', 'CONTENT_MANAGER']), async (req, res, next) => {
   try {
     const { title, subtitle, cta_text, cta_url, desktop_image, mobile_image, display_order, active } = req.body;
@@ -58,7 +54,7 @@ router.post('/banners', requireAuth, requireRole(['SUPER_ADMIN', 'CONTENT_MANAGE
 
     const result = await run(
       `INSERT INTO cms_banners (title, subtitle, cta_text, cta_url, desktop_image, mobile_image, display_order, active)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
       [
         title,
         subtitle || '',
@@ -67,7 +63,7 @@ router.post('/banners', requireAuth, requireRole(['SUPER_ADMIN', 'CONTENT_MANAGE
         desktop_image,
         mobile_image || desktop_image,
         display_order || 0,
-        active !== undefined ? (active ? 1 : 0) : 1,
+        active !== undefined ? Boolean(active) : true,
       ]
     );
 
@@ -78,11 +74,10 @@ router.post('/banners', requireAuth, requireRole(['SUPER_ADMIN', 'CONTENT_MANAGE
   }
 });
 
-// PUT /api/cms/banners/:id — Admin update banner
 router.put('/banners/:id', requireAuth, requireRole(['SUPER_ADMIN', 'CONTENT_MANAGER']), async (req, res, next) => {
   try {
     const bannerId = req.params.id;
-    const existing = await get('SELECT * FROM cms_banners WHERE id = ?', [bannerId]);
+    const existing = await get('SELECT * FROM cms_banners WHERE id = $1', [bannerId]);
     if (!existing) {
       return res.status(404).json({ success: false, error: 'Banner not found' });
     }
@@ -91,8 +86,8 @@ router.put('/banners/:id', requireAuth, requireRole(['SUPER_ADMIN', 'CONTENT_MAN
 
     await run(
       `UPDATE cms_banners
-       SET title = ?, subtitle = ?, cta_text = ?, cta_url = ?, desktop_image = ?, mobile_image = ?, display_order = ?, active = ?
-       WHERE id = ?`,
+       SET title = $1, subtitle = $2, cta_text = $3, cta_url = $4, desktop_image = $5, mobile_image = $6, display_order = $7, active = $8
+       WHERE id = $9`,
       [
         title !== undefined ? title : existing.title,
         subtitle !== undefined ? subtitle : existing.subtitle,
@@ -101,7 +96,7 @@ router.put('/banners/:id', requireAuth, requireRole(['SUPER_ADMIN', 'CONTENT_MAN
         desktop_image !== undefined ? desktop_image : existing.desktop_image,
         mobile_image !== undefined ? mobile_image : existing.mobile_image,
         display_order !== undefined ? display_order : existing.display_order,
-        active !== undefined ? (active ? 1 : 0) : existing.active,
+        active !== undefined ? Boolean(active) : existing.active,
         bannerId,
       ]
     );
@@ -113,16 +108,15 @@ router.put('/banners/:id', requireAuth, requireRole(['SUPER_ADMIN', 'CONTENT_MAN
   }
 });
 
-// DELETE /api/cms/banners/:id — Admin delete banner
 router.delete('/banners/:id', requireAuth, requireRole(['SUPER_ADMIN', 'CONTENT_MANAGER']), async (req, res, next) => {
   try {
     const bannerId = req.params.id;
-    const existing = await get('SELECT * FROM cms_banners WHERE id = ?', [bannerId]);
+    const existing = await get('SELECT * FROM cms_banners WHERE id = $1', [bannerId]);
     if (!existing) {
       return res.status(404).json({ success: false, error: 'Banner not found' });
     }
 
-    await run('DELETE FROM cms_banners WHERE id = ?', [bannerId]);
+    await run('DELETE FROM cms_banners WHERE id = $1', [bannerId]);
     await logAuditAction(req, 'DELETE_BANNER', 'BANNER', bannerId, existing, null);
     res.json({ success: true, message: 'Banner deleted' });
   } catch (err) {
@@ -132,7 +126,6 @@ router.delete('/banners/:id', requireAuth, requireRole(['SUPER_ADMIN', 'CONTENT_
 
 // =================== CMS Blog Posts ===================
 
-// GET /api/cms/blog-posts — Public list of blog posts
 router.get('/blog-posts', async (req, res, next) => {
   try {
     const posts = await query('SELECT * FROM blog_posts ORDER BY publish_date DESC, id DESC');
@@ -142,10 +135,9 @@ router.get('/blog-posts', async (req, res, next) => {
   }
 });
 
-// GET /api/cms/blog-posts/:slug — Public blog post detail
 router.get('/blog-posts/:slug', async (req, res, next) => {
   try {
-    const post = await get('SELECT * FROM blog_posts WHERE slug = ?', [req.params.slug]);
+    const post = await get('SELECT * FROM blog_posts WHERE slug = $1', [req.params.slug]);
     if (!post) {
       return res.status(404).json({ success: false, error: 'Blog post not found' });
     }
@@ -155,7 +147,6 @@ router.get('/blog-posts/:slug', async (req, res, next) => {
   }
 });
 
-// POST /api/cms/blog-posts — Admin create blog post
 router.post('/blog-posts', requireAuth, requireRole(['SUPER_ADMIN', 'CONTENT_MANAGER']), async (req, res, next) => {
   try {
     const { title, slug, cover_image, author, publish_date, category, content, excerpt, related_products_json, seo_title, seo_meta } = req.body;
@@ -164,14 +155,14 @@ router.post('/blog-posts', requireAuth, requireRole(['SUPER_ADMIN', 'CONTENT_MAN
       return res.status(400).json({ success: false, error: 'Title, slug, content, and cover image are required' });
     }
 
-    const existing = await get('SELECT id FROM blog_posts WHERE slug = ?', [slug]);
+    const existing = await get('SELECT id FROM blog_posts WHERE slug = $1', [slug]);
     if (existing) {
       return res.status(400).json({ success: false, error: 'Blog post with this slug already exists' });
     }
 
     const result = await run(
       `INSERT INTO blog_posts (title, slug, cover_image, author, publish_date, category, content, excerpt, related_products_json, seo_title, seo_meta)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
       [
         title,
         slug,
@@ -194,11 +185,10 @@ router.post('/blog-posts', requireAuth, requireRole(['SUPER_ADMIN', 'CONTENT_MAN
   }
 });
 
-// PUT /api/cms/blog-posts/:id — Admin update blog post
 router.put('/blog-posts/:id', requireAuth, requireRole(['SUPER_ADMIN', 'CONTENT_MANAGER']), async (req, res, next) => {
   try {
     const postId = req.params.id;
-    const existing = await get('SELECT * FROM blog_posts WHERE id = ?', [postId]);
+    const existing = await get('SELECT * FROM blog_posts WHERE id = $1', [postId]);
     if (!existing) {
       return res.status(404).json({ success: false, error: 'Blog post not found' });
     }
@@ -207,8 +197,8 @@ router.put('/blog-posts/:id', requireAuth, requireRole(['SUPER_ADMIN', 'CONTENT_
 
     await run(
       `UPDATE blog_posts
-       SET title = ?, slug = ?, cover_image = ?, author = ?, publish_date = ?, category = ?, content = ?, excerpt = ?, related_products_json = ?, seo_title = ?, seo_meta = ?
-       WHERE id = ?`,
+       SET title = $1, slug = $2, cover_image = $3, author = $4, publish_date = $5, category = $6, content = $7, excerpt = $8, related_products_json = $9, seo_title = $10, seo_meta = $11
+       WHERE id = $12`,
       [
         title !== undefined ? title : existing.title,
         slug !== undefined ? slug : existing.slug,
@@ -232,16 +222,15 @@ router.put('/blog-posts/:id', requireAuth, requireRole(['SUPER_ADMIN', 'CONTENT_
   }
 });
 
-// DELETE /api/cms/blog-posts/:id — Admin delete blog post
 router.delete('/blog-posts/:id', requireAuth, requireRole(['SUPER_ADMIN', 'CONTENT_MANAGER']), async (req, res, next) => {
   try {
     const postId = req.params.id;
-    const existing = await get('SELECT * FROM blog_posts WHERE id = ?', [postId]);
+    const existing = await get('SELECT * FROM blog_posts WHERE id = $1', [postId]);
     if (!existing) {
       return res.status(404).json({ success: false, error: 'Blog post not found' });
     }
 
-    await run('DELETE FROM blog_posts WHERE id = ?', [postId]);
+    await run('DELETE FROM blog_posts WHERE id = $1', [postId]);
     await logAuditAction(req, 'DELETE_BLOG_POST', 'BLOG', postId, existing, null);
     res.json({ success: true, message: 'Blog post deleted' });
   } catch (err) {

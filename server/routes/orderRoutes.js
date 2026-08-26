@@ -11,14 +11,16 @@ router.get('/my-orders', requireAuth, async (req, res, next) => {
       `SELECT o.*,
               (SELECT COUNT(id) FROM order_items WHERE order_id = o.id) as item_count
        FROM orders o
-       WHERE o.user_id = ?
+       WHERE o.user_id = $1
        ORDER BY o.created_at DESC`,
       [req.user.id]
     );
 
     for (const order of orders) {
-      order.items = await query('SELECT * FROM order_items WHERE order_id = ?', [order.id]);
-      order.shipping_address = JSON.parse(order.shipping_address_json || '{}');
+      order.items = await query('SELECT * FROM order_items WHERE order_id = $1', [order.id]);
+      order.shipping_address = typeof order.shipping_address_json === 'string'
+        ? JSON.parse(order.shipping_address_json || '{}')
+        : (order.shipping_address_json || {});
     }
 
     res.json({ success: true, orders });
@@ -27,17 +29,17 @@ router.get('/my-orders', requireAuth, async (req, res, next) => {
   }
 });
 
-// Track Order by Order Number & Email/Phone (Guest / Public tracking)
+// Track Order by Order Number (Guest / Public tracking)
 router.get('/track/:orderNumber', async (req, res, next) => {
   try {
     const { orderNumber } = req.params;
-    const order = await get('SELECT * FROM orders WHERE order_number = ?', [orderNumber]);
+    const order = await get('SELECT * FROM orders WHERE order_number = $1', [orderNumber]);
     if (!order) {
       return res.status(404).json({ success: false, error: 'Order not found' });
     }
 
-    const items = await query('SELECT * FROM order_items WHERE order_id = ?', [order.id]);
-    const shipment = await get('SELECT * FROM shipments WHERE order_id = ?', [order.id]);
+    const items = await query('SELECT * FROM order_items WHERE order_id = $1', [order.id]);
+    const shipment = await get('SELECT * FROM shipments WHERE order_id = $1', [order.id]);
 
     const timeline = [
       { status: 'PENDING', title: 'Order Placed', timestamp: order.created_at, done: true },
@@ -59,7 +61,9 @@ router.get('/track/:orderNumber', async (req, res, next) => {
         total_amount: order.total_amount,
         items,
         shipment,
-        shipping_address: JSON.parse(order.shipping_address_json || '{}'),
+        shipping_address: typeof order.shipping_address_json === 'string'
+          ? JSON.parse(order.shipping_address_json || '{}')
+          : (order.shipping_address_json || {}),
         timeline,
       },
     });
@@ -68,16 +72,18 @@ router.get('/track/:orderNumber', async (req, res, next) => {
   }
 });
 
-// Download GST Tax Invoice Data + Printable HTML
+// Download GST Tax Invoice
 router.get('/:id/invoice', authenticateToken, async (req, res, next) => {
   try {
-    const order = await get('SELECT * FROM orders WHERE id = ?', [req.params.id]);
+    const order = await get('SELECT * FROM orders WHERE id = $1', [req.params.id]);
     if (!order) {
       return res.status(404).json({ success: false, error: 'Order not found' });
     }
 
-    const items = await query('SELECT * FROM order_items WHERE order_id = ?', [order.id]);
-    const shippingAddress = JSON.parse(order.shipping_address_json || '{}');
+    const items = await query('SELECT * FROM order_items WHERE order_id = $1', [order.id]);
+    const shippingAddress = typeof order.shipping_address_json === 'string'
+      ? JSON.parse(order.shipping_address_json || '{}')
+      : (order.shipping_address_json || {});
 
     const storeInfo = {
       name: 'Parthvi Ayurveda (Parthvi Herbal Formulations Pvt Ltd)',
@@ -122,7 +128,6 @@ router.get('/:id/invoice', authenticateToken, async (req, res, next) => {
       },
     };
 
-    // Generate printable HTML invoice
     const itemRows = invoiceData.items.map((item, i) => `
       <tr>
         <td style="padding:8px;border-bottom:1px solid #e5e2dc;">${i + 1}</td>
@@ -130,8 +135,8 @@ router.get('/:id/invoice', authenticateToken, async (req, res, next) => {
         <td style="padding:8px;border-bottom:1px solid #e5e2dc;text-align:center;">${item.hsn_sac}</td>
         <td style="padding:8px;border-bottom:1px solid #e5e2dc;text-align:center;">${item.sku}</td>
         <td style="padding:8px;border-bottom:1px solid #e5e2dc;text-align:center;">${item.quantity}</td>
-        <td style="padding:8px;border-bottom:1px solid #e5e2dc;text-align:right;">₹${item.unit_price.toFixed(2)}</td>
-        <td style="padding:8px;border-bottom:1px solid #e5e2dc;text-align:right;">₹${item.total_price.toFixed(2)}</td>
+        <td style="padding:8px;border-bottom:1px solid #e5e2dc;text-align:right;">₹${Number(item.unit_price).toFixed(2)}</td>
+        <td style="padding:8px;border-bottom:1px solid #e5e2dc;text-align:right;">₹${Number(item.total_price).toFixed(2)}</td>
       </tr>
     `).join('');
 
@@ -173,7 +178,6 @@ router.get('/:id/invoice', authenticateToken, async (req, res, next) => {
       <div class="store-detail" style="text-align:right;">Date: ${new Date(invoiceData.invoice_date).toLocaleDateString('en-IN')}</div>
     </div>
   </div>
-
   <div class="meta-grid">
     <div class="meta-box">
       <h4>Bill To</h4>
@@ -189,32 +193,26 @@ router.get('/:id/invoice', authenticateToken, async (req, res, next) => {
       Date: ${new Date(invoiceData.invoice_date).toLocaleDateString('en-IN')}
     </div>
   </div>
-
   <table>
     <thead>
       <tr>
         <th>#</th><th>Product</th><th>HSN/SAC</th><th>SKU</th><th>Qty</th><th style="text-align:right;">Unit Price</th><th style="text-align:right;">Total</th>
       </tr>
     </thead>
-    <tbody>
-      ${itemRows}
-    </tbody>
+    <tbody>${itemRows}</tbody>
   </table>
-
   <table class="totals">
-    <tr><td>Subtotal</td><td style="text-align:right;">₹${invoiceData.pricing.subtotal.toFixed(2)}</td></tr>
-    ${invoiceData.pricing.discount_amount > 0 ? `<tr><td>Discount</td><td style="text-align:right;color:#C5A059;">-₹${invoiceData.pricing.discount_amount.toFixed(2)}</td></tr>` : ''}
+    <tr><td>Subtotal</td><td style="text-align:right;">₹${Number(invoiceData.pricing.subtotal).toFixed(2)}</td></tr>
+    ${invoiceData.pricing.discount_amount > 0 ? `<tr><td>Discount</td><td style="text-align:right;color:#C5A059;">-₹${Number(invoiceData.pricing.discount_amount).toFixed(2)}</td></tr>` : ''}
     <tr><td>CGST (6%)</td><td style="text-align:right;">₹${invoiceData.pricing.cgst.toFixed(2)}</td></tr>
     <tr><td>SGST (6%)</td><td style="text-align:right;">₹${invoiceData.pricing.sgst.toFixed(2)}</td></tr>
-    <tr><td>Shipping</td><td style="text-align:right;">${invoiceData.pricing.shipping_fee > 0 ? '₹' + invoiceData.pricing.shipping_fee.toFixed(2) : 'FREE'}</td></tr>
-    <tr class="grand"><td>Grand Total</td><td style="text-align:right;">₹${invoiceData.pricing.total_amount.toFixed(2)}</td></tr>
+    <tr><td>Shipping</td><td style="text-align:right;">${invoiceData.pricing.shipping_fee > 0 ? '₹' + Number(invoiceData.pricing.shipping_fee).toFixed(2) : 'FREE'}</td></tr>
+    <tr class="grand"><td>Grand Total</td><td style="text-align:right;">₹${Number(invoiceData.pricing.total_amount).toFixed(2)}</td></tr>
   </table>
-
   <div class="footer">
     This is a computer-generated invoice and does not require a physical signature.<br/>
     Thank you for choosing Parthvi Ayurveda — Ancient Wisdom, Modern Wellness.
   </div>
-
   <div class="no-print" style="text-align:center;margin-top:20px;">
     <button onclick="window.print()" style="background:#1A2E1D;color:#fff;border:none;padding:12px 30px;border-radius:20px;font-size:13px;cursor:pointer;">Print / Save as PDF</button>
   </div>
@@ -227,10 +225,10 @@ router.get('/:id/invoice', authenticateToken, async (req, res, next) => {
   }
 });
 
-// Cancel Order (User or Admin)
+// Cancel Order
 router.post('/:id/cancel', authenticateToken, async (req, res, next) => {
   try {
-    const order = await get('SELECT * FROM orders WHERE id = ?', [req.params.id]);
+    const order = await get('SELECT * FROM orders WHERE id = $1', [req.params.id]);
     if (!order) {
       return res.status(404).json({ success: false, error: 'Order not found' });
     }
@@ -239,25 +237,22 @@ router.post('/:id/cancel', authenticateToken, async (req, res, next) => {
       return res.status(400).json({ success: false, error: 'Order cannot be cancelled in its current state' });
     }
 
-    // Release stock
-    const orderItems = await query('SELECT * FROM order_items WHERE order_id = ?', [order.id]);
+    const orderItems = await query('SELECT * FROM order_items WHERE order_id = $1', [order.id]);
     for (const item of orderItems) {
       if (order.payment_status === 'PAID') {
-        // Stock was sold, return to available
         await run(
-          'UPDATE inventory SET available_stock = available_stock + ?, sold_stock = sold_stock - ? WHERE variant_id = ?',
+          'UPDATE inventory SET available_stock = available_stock + $1, sold_stock = sold_stock - $2 WHERE variant_id = $3',
           [item.quantity, item.quantity, item.variant_id]
         );
       } else {
-        // Stock was reserved, release
         await run(
-          'UPDATE inventory SET available_stock = available_stock + ?, reserved_stock = reserved_stock - ? WHERE variant_id = ?',
+          'UPDATE inventory SET available_stock = available_stock + $1, reserved_stock = reserved_stock - $2 WHERE variant_id = $3',
           [item.quantity, item.quantity, item.variant_id]
         );
       }
     }
 
-    await run("UPDATE orders SET status = 'CANCELLED', updated_at = CURRENT_TIMESTAMP WHERE id = ?", [order.id]);
+    await run("UPDATE orders SET status = 'CANCELLED', updated_at = NOW() WHERE id = $1", [order.id]);
 
     res.json({ success: true, message: 'Order cancelled successfully' });
   } catch (err) {
@@ -273,7 +268,7 @@ router.post('/:id/return', requireAuth, async (req, res, next) => {
       return res.status(400).json({ success: false, error: 'Order item and return reason are required' });
     }
 
-    const order = await get('SELECT * FROM orders WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
+    const order = await get('SELECT * FROM orders WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
     if (!order) {
       return res.status(404).json({ success: false, error: 'Order not found' });
     }
@@ -282,18 +277,18 @@ router.post('/:id/return', requireAuth, async (req, res, next) => {
       return res.status(400).json({ success: false, error: 'Return request can only be submitted for delivered orders' });
     }
 
-    const orderItem = await get('SELECT * FROM order_items WHERE id = ? AND order_id = ?', [order_item_id, order.id]);
+    const orderItem = await get('SELECT * FROM order_items WHERE id = $1 AND order_id = $2', [order_item_id, order.id]);
     if (!orderItem) {
       return res.status(404).json({ success: false, error: 'Order item not found' });
     }
 
     const result = await run(
       `INSERT INTO returns (order_id, order_item_id, user_id, reason, image_url, refund_amount, status)
-       VALUES (?, ?, ?, ?, ?, ?, 'REQUESTED')`,
+       VALUES ($1, $2, $3, $4, $5, $6, 'REQUESTED') RETURNING id`,
       [order.id, orderItem.id, req.user.id, reason, image_url || null, orderItem.total_price]
     );
 
-    await run("UPDATE orders SET status = 'RETURN_REQUESTED' WHERE id = ?", [order.id]);
+    await run("UPDATE orders SET status = 'RETURN_REQUESTED' WHERE id = $1", [order.id]);
 
     res.json({ success: true, return_id: result.lastID, message: 'Return request submitted successfully' });
   } catch (err) {

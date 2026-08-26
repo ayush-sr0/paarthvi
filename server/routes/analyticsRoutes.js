@@ -17,7 +17,7 @@ router.post('/event', async (req, res, next) => {
     await run(
       `INSERT INTO analytics_events (
         event_name, session_id, user_id, page, product_id, category_id, order_id, device, browser, metadata_json
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
       [
         event_name,
         session_id,
@@ -41,7 +41,6 @@ router.post('/event', async (req, res, next) => {
 // Admin Analytics Suite
 router.get('/dashboard', requireAuth, requireRole(['SUPER_ADMIN', 'CONTENT_MANAGER', 'PRODUCT_MANAGER']), async (req, res, next) => {
   try {
-    // 1. Funnel Calculation
     const totalSessions = (await get(`SELECT COUNT(DISTINCT session_id) as count FROM analytics_events`)).count || 450;
     const productViews = (await get(`SELECT COUNT(DISTINCT session_id) as count FROM analytics_events WHERE event_name = 'PRODUCT_VIEW'`)).count || 380;
     const cartAdditions = (await get(`SELECT COUNT(DISTINCT session_id) as count FROM analytics_events WHERE event_name = 'ADD_TO_CART'`)).count || 145;
@@ -56,7 +55,6 @@ router.get('/dashboard', requireAuth, requireRole(['SUPER_ADMIN', 'CONTENT_MANAG
       { stage: 'Purchases', count: purchases, conversion: Math.round((purchases / checkouts) * 100) },
     ];
 
-    // 2. Search Analytics
     const topSearches = await query(
       `SELECT metadata_json FROM analytics_events WHERE event_name = 'SEARCH' AND metadata_json IS NOT NULL ORDER BY timestamp DESC LIMIT 50`
     );
@@ -65,7 +63,7 @@ router.get('/dashboard', requireAuth, requireRole(['SUPER_ADMIN', 'CONTENT_MANAG
 
     for (const item of topSearches) {
       try {
-        const meta = JSON.parse(item.metadata_json);
+        const meta = typeof item.metadata_json === 'string' ? JSON.parse(item.metadata_json) : item.metadata_json;
         if (meta.query) {
           const q = meta.query.toLowerCase();
           searchTermsCount[q] = (searchTermsCount[q] || 0) + 1;
@@ -81,7 +79,6 @@ router.get('/dashboard', requireAuth, requireRole(['SUPER_ADMIN', 'CONTENT_MANAG
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
 
-    // 3. Optimization Insights Generator
     const insights = [
       {
         type: 'WARNING',

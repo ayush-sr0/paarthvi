@@ -7,7 +7,7 @@ const router = express.Router();
 const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET || 'test_secret_key_1234567890';
 const razorpayWebhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET || 'webhook_secret_key_1234567890';
 
-// Verify Payment Callback (Frontend Checkout completion)
+// Verify Payment Callback
 router.post('/verify', async (req, res, next) => {
   try {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature, order_id } = req.body;
@@ -16,7 +16,7 @@ router.post('/verify', async (req, res, next) => {
       return res.status(400).json({ success: false, error: 'Missing payment verification credentials' });
     }
 
-    const order = await get('SELECT * FROM orders WHERE id = ?', [order_id]);
+    const order = await get('SELECT * FROM orders WHERE id = $1', [order_id]);
     if (!order) {
       return res.status(404).json({ success: false, error: 'Order not found' });
     }
@@ -32,57 +32,52 @@ router.post('/verify', async (req, res, next) => {
     }
 
     if (!isValidSignature) {
-      // Payment Failed: release reserved stock
-      const orderItems = await query('SELECT * FROM order_items WHERE order_id = ?', [order_id]);
+      const orderItems = await query('SELECT * FROM order_items WHERE order_id = $1', [order_id]);
       for (const item of orderItems) {
         await run(
           `UPDATE inventory
-           SET available_stock = available_stock + ?, reserved_stock = reserved_stock - ?
-           WHERE variant_id = ?`,
+           SET available_stock = available_stock + $1, reserved_stock = reserved_stock - $2
+           WHERE variant_id = $3`,
           [item.quantity, item.quantity, item.variant_id]
         );
       }
 
-      await run("UPDATE orders SET payment_status = 'FAILED', status = 'CANCELLED' WHERE id = ?", [order_id]);
+      await run("UPDATE orders SET payment_status = 'FAILED', status = 'CANCELLED' WHERE id = $1", [order_id]);
       await run(
         `INSERT INTO payments (order_id, amount, payment_method, status, razorpay_order_id, razorpay_payment_id, razorpay_signature)
-         VALUES (?, ?, 'RAZORPAY', 'FAILED', ?, ?, ?)`,
+         VALUES ($1, $2, 'RAZORPAY', 'FAILED', $3, $4, $5)`,
         [order_id, order.total_amount, razorpay_order_id, razorpay_payment_id, razorpay_signature]
       );
 
       return res.status(400).json({ success: false, error: 'Payment signature verification failed' });
     }
 
-    // Payment Successful
     await run(
       `UPDATE orders
-       SET payment_status = 'PAID', status = 'CONFIRMED', razorpay_payment_id = ?, updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?`,
+       SET payment_status = 'PAID', status = 'CONFIRMED', razorpay_payment_id = $1, updated_at = NOW()
+       WHERE id = $2`,
       [razorpay_payment_id, order_id]
     );
 
-    // Finalize stock: move reserved -> sold
-    const orderItems = await query('SELECT * FROM order_items WHERE order_id = ?', [order_id]);
+    const orderItems = await query('SELECT * FROM order_items WHERE order_id = $1', [order_id]);
     for (const item of orderItems) {
       await run(
         `UPDATE inventory
-         SET reserved_stock = reserved_stock - ?, sold_stock = sold_stock + ?
-         WHERE variant_id = ?`,
+         SET reserved_stock = reserved_stock - $1, sold_stock = sold_stock + $2
+         WHERE variant_id = $3`,
         [item.quantity, item.quantity, item.variant_id]
       );
     }
 
-    // Log payment record
     await run(
       `INSERT INTO payments (order_id, amount, payment_method, status, razorpay_order_id, razorpay_payment_id, razorpay_signature)
-       VALUES (?, ?, 'RAZORPAY', 'SUCCESS', ?, ?, ?)`,
+       VALUES ($1, $2, 'RAZORPAY', 'SUCCESS', $3, $4, $5)`,
       [order_id, order.total_amount, razorpay_order_id, razorpay_payment_id, razorpay_signature]
     );
 
-    // Track analytics event
     await run(
       `INSERT INTO analytics_events (event_name, session_id, user_id, page, order_id, metadata_json)
-       VALUES ('PURCHASE', 'checkout_session', ?, '/checkout/confirmation', ?, ?)`,
+       VALUES ('PURCHASE', 'checkout_session', $1, '/checkout/confirmation', $2, $3)`,
       [order.user_id, order_id, JSON.stringify({ amount: order.total_amount, method: 'RAZORPAY' })]
     );
 
@@ -97,20 +92,18 @@ router.post('/verify', async (req, res, next) => {
   }
 });
 
-// Razorpay Webhook Receiver Endpoint (Idempotent callback handler)
+// Razorpay Webhook Receiver
 router.post('/webhook', async (req, res, next) => {
   try {
     const signature = req.headers['x-razorpay-signature'];
     const eventId = req.headers['x-razorpay-event-id'] || `evt_${Date.now()}`;
     const payload = JSON.stringify(req.body);
 
-    // Check duplicate webhook event
-    const existingEvent = await get('SELECT id FROM payment_events WHERE event_id = ?', [eventId]);
+    const existingEvent = await get('SELECT id FROM payment_events WHERE event_id = $1', [eventId]);
     if (existingEvent) {
       return res.status(200).json({ success: true, message: 'Event already processed' });
     }
 
-    // Verify signature if secret provided
     let verified = true;
     if (signature && razorpayWebhookSecret) {
       const expectedSignature = crypto
@@ -120,10 +113,9 @@ router.post('/webhook', async (req, res, next) => {
       verified = (expectedSignature === signature);
     }
 
-    // Log Webhook Event
     await run(
       `INSERT INTO payment_events (provider, event_type, event_id, payload_json, processed)
-       VALUES ('RAZORPAY', ?, ?, ?, 1)`,
+       VALUES ('RAZORPAY', $1, $2, $3, TRUE)`,
       [req.body.event || 'payment.captured', eventId, payload]
     );
 
@@ -134,21 +126,21 @@ router.post('/webhook', async (req, res, next) => {
       const razorpayPaymentId = paymentEntity?.id;
 
       if (razorpayOrderId) {
-        const order = await get('SELECT * FROM orders WHERE razorpay_order_id = ?', [razorpayOrderId]);
+        const order = await get('SELECT * FROM orders WHERE razorpay_order_id = $1', [razorpayOrderId]);
         if (order && order.payment_status !== 'PAID') {
           await run(
             `UPDATE orders
-             SET payment_status = 'PAID', status = 'CONFIRMED', razorpay_payment_id = ?, updated_at = CURRENT_TIMESTAMP
-             WHERE id = ?`,
+             SET payment_status = 'PAID', status = 'CONFIRMED', razorpay_payment_id = $1, updated_at = NOW()
+             WHERE id = $2`,
             [razorpayPaymentId, order.id]
           );
 
-          const orderItems = await query('SELECT * FROM order_items WHERE order_id = ?', [order.id]);
+          const orderItems = await query('SELECT * FROM order_items WHERE order_id = $1', [order.id]);
           for (const item of orderItems) {
             await run(
               `UPDATE inventory
-               SET reserved_stock = reserved_stock - ?, sold_stock = sold_stock + ?
-               WHERE variant_id = ?`,
+               SET reserved_stock = reserved_stock - $1, sold_stock = sold_stock + $2
+               WHERE variant_id = $3`,
               [item.quantity, item.quantity, item.variant_id]
             );
           }
@@ -162,7 +154,7 @@ router.post('/webhook', async (req, res, next) => {
   }
 });
 
-// System Payment Health Metrics API
+// System Payment Health Metrics
 router.get('/health', async (req, res, next) => {
   try {
     const totalPayments = await get('SELECT COUNT(id) as count FROM payments');

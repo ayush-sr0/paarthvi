@@ -13,14 +13,14 @@ router.post('/register', async (req, res, next) => {
       return res.status(400).json({ success: false, error: 'Name, email, and password are required' });
     }
 
-    const existing = await get('SELECT id FROM users WHERE email = ?', [email]);
+    const existing = await get('SELECT id FROM users WHERE email = $1', [email]);
     if (existing) {
       return res.status(400).json({ success: false, error: 'User with this email already exists' });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
     const result = await run(
-      'INSERT INTO users (name, email, password_hash, phone, role) VALUES (?, ?, ?, ?, ?)',
+      'INSERT INTO users (name, email, password_hash, phone, role) VALUES ($1, $2, $3, $4, $5) RETURNING id',
       [name, email, passwordHash, phone || null, 'CUSTOMER']
     );
 
@@ -41,7 +41,7 @@ router.post('/login', async (req, res, next) => {
       return res.status(400).json({ success: false, error: 'Email and password are required' });
     }
 
-    const user = await get('SELECT * FROM users WHERE email = ?', [email]);
+    const user = await get('SELECT * FROM users WHERE email = $1', [email]);
     if (!user) {
       return res.status(401).json({ success: false, error: 'Invalid credentials' });
     }
@@ -65,8 +65,8 @@ router.post('/login', async (req, res, next) => {
 // Get current profile
 router.get('/me', requireAuth, async (req, res, next) => {
   try {
-    const user = await get('SELECT id, name, email, phone, role, created_at FROM users WHERE id = ?', [req.user.id]);
-    const addresses = await query('SELECT * FROM addresses WHERE user_id = ? ORDER BY is_default DESC, id DESC', [req.user.id]);
+    const user = await get('SELECT id, name, email, phone, role, created_at FROM users WHERE id = $1', [req.user.id]);
+    const addresses = await query('SELECT * FROM addresses WHERE user_id = $1 ORDER BY is_default DESC, id DESC', [req.user.id]);
     res.json({ success: true, user, addresses });
   } catch (err) {
     next(err);
@@ -82,13 +82,13 @@ router.post('/address', requireAuth, async (req, res, next) => {
     }
 
     if (is_default) {
-      await run('UPDATE addresses SET is_default = 0 WHERE user_id = ?', [req.user.id]);
+      await run('UPDATE addresses SET is_default = FALSE WHERE user_id = $1', [req.user.id]);
     }
 
     const result = await run(
       `INSERT INTO addresses (user_id, name, phone, street_address, city, state, pincode, is_default)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [req.user.id, name, phone, street_address, city, state, pincode, is_default ? 1 : 0]
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+      [req.user.id, name, phone, street_address, city, state, pincode, is_default ? true : false]
     );
 
     res.json({ success: true, address_id: result.lastID });
@@ -101,7 +101,7 @@ router.post('/address', requireAuth, async (req, res, next) => {
 router.put('/address/:id', requireAuth, async (req, res, next) => {
   try {
     const addressId = req.params.id;
-    const existing = await get('SELECT * FROM addresses WHERE id = ? AND user_id = ?', [addressId, req.user.id]);
+    const existing = await get('SELECT * FROM addresses WHERE id = $1 AND user_id = $2', [addressId, req.user.id]);
     if (!existing) {
       return res.status(404).json({ success: false, error: 'Address not found' });
     }
@@ -109,13 +109,13 @@ router.put('/address/:id', requireAuth, async (req, res, next) => {
     const { name, phone, street_address, city, state, pincode, is_default } = req.body;
 
     if (is_default) {
-      await run('UPDATE addresses SET is_default = 0 WHERE user_id = ?', [req.user.id]);
+      await run('UPDATE addresses SET is_default = FALSE WHERE user_id = $1', [req.user.id]);
     }
 
     await run(
       `UPDATE addresses
-       SET name = ?, phone = ?, street_address = ?, city = ?, state = ?, pincode = ?, is_default = ?
-       WHERE id = ? AND user_id = ?`,
+       SET name = $1, phone = $2, street_address = $3, city = $4, state = $5, pincode = $6, is_default = $7
+       WHERE id = $8 AND user_id = $9`,
       [
         name || existing.name,
         phone || existing.phone,
@@ -123,7 +123,7 @@ router.put('/address/:id', requireAuth, async (req, res, next) => {
         city || existing.city,
         state || existing.state,
         pincode || existing.pincode,
-        is_default !== undefined ? (is_default ? 1 : 0) : existing.is_default,
+        is_default !== undefined ? Boolean(is_default) : existing.is_default,
         addressId,
         req.user.id,
       ]
@@ -139,12 +139,12 @@ router.put('/address/:id', requireAuth, async (req, res, next) => {
 router.delete('/address/:id', requireAuth, async (req, res, next) => {
   try {
     const addressId = req.params.id;
-    const existing = await get('SELECT * FROM addresses WHERE id = ? AND user_id = ?', [addressId, req.user.id]);
+    const existing = await get('SELECT * FROM addresses WHERE id = $1 AND user_id = $2', [addressId, req.user.id]);
     if (!existing) {
       return res.status(404).json({ success: false, error: 'Address not found' });
     }
 
-    await run('DELETE FROM addresses WHERE id = ? AND user_id = ?', [addressId, req.user.id]);
+    await run('DELETE FROM addresses WHERE id = $1 AND user_id = $2', [addressId, req.user.id]);
     res.json({ success: true, message: 'Address deleted successfully' });
   } catch (err) {
     next(err);
@@ -155,8 +155,8 @@ router.delete('/address/:id', requireAuth, async (req, res, next) => {
 router.put('/address/:id/default', requireAuth, async (req, res, next) => {
   try {
     const addressId = req.params.id;
-    await run('UPDATE addresses SET is_default = 0 WHERE user_id = ?', [req.user.id]);
-    await run('UPDATE addresses SET is_default = 1 WHERE id = ? AND user_id = ?', [addressId, req.user.id]);
+    await run('UPDATE addresses SET is_default = FALSE WHERE user_id = $1', [req.user.id]);
+    await run('UPDATE addresses SET is_default = TRUE WHERE id = $1 AND user_id = $2', [addressId, req.user.id]);
     res.json({ success: true, message: 'Default address updated' });
   } catch (err) {
     next(err);

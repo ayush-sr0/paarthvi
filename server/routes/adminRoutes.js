@@ -4,12 +4,11 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// Helper to log admin actions in audit_logs
 const logAuditAction = async (req, action, entity, entity_id, prev_val = null, new_val = null) => {
   try {
     await run(
       `INSERT INTO audit_logs (admin_id, admin_email, action, entity, entity_id, prev_value_json, new_value_json)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [
         req.user?.id || 0,
         req.user?.email || 'admin@parthvi.com',
@@ -25,7 +24,6 @@ const logAuditAction = async (req, action, entity, entity_id, prev_val = null, n
   }
 };
 
-// Order State Machine: Valid Transitions (FR-022)
 const VALID_TRANSITIONS = {
   PENDING: ['CONFIRMED', 'CANCELLED'],
   CONFIRMED: ['PROCESSING', 'CANCELLED'],
@@ -43,7 +41,6 @@ const VALID_TRANSITIONS = {
   REFUNDED: [],
 };
 
-// Protect all admin routes
 router.use(requireAuth);
 
 // 1. Dashboard Overview Metrics
@@ -56,7 +53,7 @@ router.get('/overview', requireRole(['SUPER_ADMIN', 'PRODUCT_MANAGER', 'ORDER_MA
     const deliveredOrders = await get(`SELECT COUNT(id) as count FROM orders WHERE status = 'DELIVERED'`);
     const cancelledOrders = await get(`SELECT COUNT(id) as count FROM orders WHERE status = 'CANCELLED'`);
     const lowStockItems = await get(`SELECT COUNT(id) as count FROM inventory WHERE available_stock <= low_stock_threshold`);
-    const expiringBatches = await get(`SELECT COUNT(id) as count FROM batches WHERE expiry_date <= DATE('now', '+90 days')`);
+    const expiringBatches = await get(`SELECT COUNT(id) as count FROM batches WHERE expiry_date <= CURRENT_DATE + INTERVAL '90 days'`);
     const totalCustomers = await get(`SELECT COUNT(id) as count FROM users WHERE role = 'CUSTOMER'`);
 
     const recentOrders = await query(`SELECT id, order_number, guest_name, total_amount, status, payment_status, created_at FROM orders ORDER BY created_at DESC LIMIT 5`);
@@ -64,7 +61,7 @@ router.get('/overview', requireRole(['SUPER_ADMIN', 'PRODUCT_MANAGER', 'ORDER_MA
       `SELECT p.name, SUM(oi.quantity) as total_qty, SUM(oi.total_price) as revenue
        FROM order_items oi
        JOIN products p ON oi.product_id = p.id
-       GROUP BY p.id ORDER BY total_qty DESC LIMIT 5`
+       GROUP BY p.id, p.name ORDER BY total_qty DESC LIMIT 5`
     );
 
     res.json({
@@ -79,7 +76,7 @@ router.get('/overview', requireRole(['SUPER_ADMIN', 'PRODUCT_MANAGER', 'ORDER_MA
         low_stock_items: lowStockItems.count || 0,
         expiring_batches: expiringBatches.count || 0,
         total_customers: totalCustomers.count || 0,
-        conversion_rate: 3.42, // Simulated analytics conversion rate
+        conversion_rate: 3.42,
       },
       recent_orders: recentOrders,
       top_products: topProducts,
@@ -89,27 +86,29 @@ router.get('/overview', requireRole(['SUPER_ADMIN', 'PRODUCT_MANAGER', 'ORDER_MA
   }
 });
 
-// 2. Orders Manager (List & Filter Orders)
+// 2. Orders Manager
 router.get('/orders', requireRole(['ORDER_MANAGER', 'SUPPORT_MANAGER']), async (req, res, next) => {
   try {
     const { status, search } = req.query;
     let sql = `SELECT * FROM orders WHERE 1=1`;
     const params = [];
+    let paramIdx = 1;
 
     if (status) {
-      sql += ` AND status = ?`;
+      sql += ` AND status = $${paramIdx++}`;
       params.push(status);
     }
     if (search) {
-      sql += ` AND (order_number LIKE ? OR guest_name LIKE ? OR guest_phone LIKE ?)`;
+      sql += ` AND (order_number LIKE $${paramIdx} OR guest_name LIKE $${paramIdx + 1} OR guest_phone LIKE $${paramIdx + 2})`;
       params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+      paramIdx += 3;
     }
 
     sql += ` ORDER BY created_at DESC`;
     const orders = await query(sql, params);
 
     for (const o of orders) {
-      o.items = await query('SELECT * FROM order_items WHERE order_id = ?', [o.id]);
+      o.items = await query('SELECT * FROM order_items WHERE order_id = $1', [o.id]);
     }
 
     res.json({ success: true, orders });
@@ -118,18 +117,17 @@ router.get('/orders', requireRole(['ORDER_MANAGER', 'SUPPORT_MANAGER']), async (
   }
 });
 
-// Update Order Status (Order State Machine Transition with Guards)
+// Update Order Status
 router.put('/orders/:id/status', requireRole(['ORDER_MANAGER']), async (req, res, next) => {
   try {
     const { status } = req.body;
     const orderId = req.params.id;
-    const order = await get('SELECT * FROM orders WHERE id = ?', [orderId]);
+    const order = await get('SELECT * FROM orders WHERE id = $1', [orderId]);
 
     if (!order) {
       return res.status(404).json({ success: false, error: 'Order not found' });
     }
 
-    // State Machine Guard: validate transition
     const allowedNext = VALID_TRANSITIONS[order.status] || [];
     if (!allowedNext.includes(status)) {
       return res.status(400).json({
@@ -138,7 +136,7 @@ router.put('/orders/:id/status', requireRole(['ORDER_MANAGER']), async (req, res
       });
     }
 
-    await run('UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [status, orderId]);
+    await run('UPDATE orders SET status = $1, updated_at = NOW() WHERE id = $2', [status, orderId]);
     await logAuditAction(req, 'UPDATE_ORDER_STATUS', 'ORDER', orderId, { status: order.status }, { status });
 
     res.json({ success: true, message: `Order status updated to ${status}` });
@@ -171,25 +169,133 @@ router.post('/products', requireRole(['PRODUCT_MANAGER']), async (req, res, next
       `INSERT INTO products (
         name, slug, category_id, brand, short_desc, description, mrp, selling_price,
         is_featured, is_bestseller, ingredients, key_ingredients, benefits, usage_directions, warnings, storage_info, net_qty, manufacturer_info
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [name, slug, category_id, brand || 'Parthvi Ayurveda', short_desc, description, mrp, selling_price, is_featured ? 1 : 0, is_bestseller ? 1 : 0, ingredients, key_ingredients, benefits, usage_directions, warnings, storage_info, net_qty, manufacturer_info]
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18) RETURNING id`,
+      [name, slug, category_id, brand || 'Parthvi Ayurveda', short_desc, description, mrp, selling_price, Boolean(is_featured), Boolean(is_bestseller), ingredients, key_ingredients, benefits, usage_directions, warnings, storage_info, net_qty, manufacturer_info]
     );
 
     const productId = resProd.lastID;
     if (image_url) {
-      await run('INSERT INTO product_images (product_id, image_url, display_order) VALUES (?, ?, 1)', [productId, image_url]);
+      await run('INSERT INTO product_images (product_id, image_url, display_order) VALUES ($1, $2, 1)', [productId, image_url]);
     }
 
-    // Default variant & inventory
     const resVar = await run(
-      'INSERT INTO product_variants (product_id, sku, attribute_name, attribute_value, mrp, selling_price) VALUES (?, ?, ?, ?, ?, ?)',
+      'INSERT INTO product_variants (product_id, sku, attribute_name, attribute_value, mrp, selling_price) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
       [productId, `SKU-${slug.toUpperCase()}-STD`, 'Pack', 'Standard Pack', mrp, selling_price]
     );
 
-    await run('INSERT INTO inventory (variant_id, available_stock, low_stock_threshold) VALUES (?, 100, 10)', [resVar.lastID]);
+    await run('INSERT INTO inventory (variant_id, available_stock, low_stock_threshold) VALUES ($1, 100, 10)', [resVar.lastID]);
 
     await logAuditAction(req, 'CREATE_PRODUCT', 'PRODUCT', productId, null, { name, slug });
     res.json({ success: true, product_id: productId });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Update Product
+router.put('/products/:id', requireRole(['PRODUCT_MANAGER']), async (req, res, next) => {
+  try {
+    const productId = req.params.id;
+    const prev = await get('SELECT * FROM products WHERE id = $1', [productId]);
+    if (!prev) return res.status(404).json({ success: false, error: 'Product not found' });
+
+    const {
+      name, slug, category_id, brand, short_desc, description, mrp, selling_price,
+      is_featured, is_bestseller, is_new, status,
+      ingredients, key_ingredients, benefits, usage_directions,
+      warnings, storage_info, net_qty, manufacturer_info,
+    } = req.body;
+
+    await run(
+      `UPDATE products SET
+        name = COALESCE($1, name), slug = COALESCE($2, slug), category_id = COALESCE($3, category_id),
+        brand = COALESCE($4, brand), short_desc = COALESCE($5, short_desc), description = COALESCE($6, description),
+        mrp = COALESCE($7, mrp), selling_price = COALESCE($8, selling_price),
+        is_featured = COALESCE($9, is_featured), is_bestseller = COALESCE($10, is_bestseller),
+        is_new = COALESCE($11, is_new), status = COALESCE($12, status),
+        ingredients = COALESCE($13, ingredients), key_ingredients = COALESCE($14, key_ingredients),
+        benefits = COALESCE($15, benefits), usage_directions = COALESCE($16, usage_directions),
+        warnings = COALESCE($17, warnings), storage_info = COALESCE($18, storage_info),
+        net_qty = COALESCE($19, net_qty), manufacturer_info = COALESCE($20, manufacturer_info),
+        updated_at = NOW()
+       WHERE id = $21`,
+      [
+        name, slug, category_id, brand, short_desc, description, mrp, selling_price,
+        is_featured != null ? Boolean(is_featured) : null,
+        is_bestseller != null ? Boolean(is_bestseller) : null,
+        is_new != null ? Boolean(is_new) : null,
+        status, ingredients, key_ingredients, benefits, usage_directions,
+        warnings, storage_info, net_qty, manufacturer_info,
+        productId,
+      ]
+    );
+
+    await logAuditAction(req, 'UPDATE_PRODUCT', 'PRODUCT', productId, prev, req.body);
+    res.json({ success: true, message: 'Product updated successfully' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Delete Product
+router.delete('/products/:id', requireRole(['PRODUCT_MANAGER']), async (req, res, next) => {
+  try {
+    const productId = req.params.id;
+    const prev = await get('SELECT name, slug FROM products WHERE id = $1', [productId]);
+    if (!prev) return res.status(404).json({ success: false, error: 'Product not found' });
+
+    await run('DELETE FROM products WHERE id = $1', [productId]);
+    await logAuditAction(req, 'DELETE_PRODUCT', 'PRODUCT', productId, prev, null);
+    res.json({ success: true, message: `Product "${prev.name}" deleted` });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Add image to product gallery
+router.post('/products/:id/images', requireRole(['PRODUCT_MANAGER']), async (req, res, next) => {
+  try {
+    const productId = req.params.id;
+    const { image_url, display_order } = req.body;
+    if (!image_url) return res.status(400).json({ success: false, error: 'image_url required' });
+
+    const maxOrder = await get('SELECT MAX(display_order) as max_order FROM product_images WHERE product_id = $1', [productId]);
+    const order = display_order || (maxOrder?.max_order || 0) + 1;
+
+    const imgRes = await run(
+      'INSERT INTO product_images (product_id, image_url, display_order) VALUES ($1, $2, $3) RETURNING id',
+      [productId, image_url, order]
+    );
+    await logAuditAction(req, 'ADD_PRODUCT_IMAGE', 'PRODUCT_IMAGE', imgRes.lastID, null, { product_id: productId, image_url });
+    res.json({ success: true, image_id: imgRes.lastID });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Delete image from product gallery
+router.delete('/products/:id/images/:imageId', requireRole(['PRODUCT_MANAGER']), async (req, res, next) => {
+  try {
+    const { id: productId, imageId } = req.params;
+    const img = await get('SELECT * FROM product_images WHERE id = $1 AND product_id = $2', [imageId, productId]);
+    if (!img) return res.status(404).json({ success: false, error: 'Image not found' });
+
+    await run('DELETE FROM product_images WHERE id = $1', [imageId]);
+    await logAuditAction(req, 'DELETE_PRODUCT_IMAGE', 'PRODUCT_IMAGE', imageId, img, null);
+    res.json({ success: true, message: 'Image removed from gallery' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Get all images for a product
+router.get('/products/:id/images', requireRole(['PRODUCT_MANAGER']), async (req, res, next) => {
+  try {
+    const images = await query(
+      'SELECT * FROM product_images WHERE product_id = $1 ORDER BY display_order ASC',
+      [req.params.id]
+    );
+    res.json({ success: true, images });
   } catch (err) {
     next(err);
   }
@@ -222,11 +328,11 @@ router.put('/inventory/:variantId', requireRole(['PRODUCT_MANAGER']), async (req
   try {
     const { available_stock, reason } = req.body;
     const variantId = req.params.variantId;
-    const prevInv = await get('SELECT available_stock FROM inventory WHERE variant_id = ?', [variantId]);
+    const prevInv = await get('SELECT available_stock FROM inventory WHERE variant_id = $1', [variantId]);
 
-    await run('UPDATE inventory SET available_stock = ? WHERE variant_id = ?', [available_stock, variantId]);
+    await run('UPDATE inventory SET available_stock = $1 WHERE variant_id = $2', [available_stock, variantId]);
     await run(
-      'INSERT INTO inventory_transactions (variant_id, change_qty, reason, admin_id) VALUES (?, ?, ?, ?)',
+      'INSERT INTO inventory_transactions (variant_id, change_qty, reason, admin_id) VALUES ($1, $2, $3, $4)',
       [variantId, available_stock - (prevInv?.available_stock || 0), reason || 'Manual Admin Stock Adjustment', req.user.id]
     );
 
@@ -261,7 +367,7 @@ router.put('/returns/:id/status', requireRole(['ORDER_MANAGER']), async (req, re
     const returnObj = await get(
       `SELECT r.*, oi.variant_id, oi.quantity FROM returns r
        JOIN order_items oi ON r.order_item_id = oi.id
-       WHERE r.id = ?`,
+       WHERE r.id = $1`,
       [returnId]
     );
     if (!returnObj) {
@@ -269,29 +375,27 @@ router.put('/returns/:id/status', requireRole(['ORDER_MANAGER']), async (req, re
     }
 
     await run(
-      `UPDATE returns SET status = ?, refund_amount = ?, transaction_ref = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      `UPDATE returns SET status = $1, refund_amount = $2, transaction_ref = $3, updated_at = NOW() WHERE id = $4`,
       [status, refund_amount || returnObj.refund_amount, transaction_ref || null, returnId]
     );
 
     if (status === 'APPROVED') {
-      await run("UPDATE orders SET status = 'RETURN_APPROVED' WHERE id = ?", [returnObj.order_id]);
+      await run("UPDATE orders SET status = 'RETURN_APPROVED' WHERE id = $1", [returnObj.order_id]);
     }
 
     if (status === 'REFUNDED') {
-      // Restore inventory
       await run(
-        'UPDATE inventory SET available_stock = available_stock + ?, sold_stock = sold_stock - ? WHERE variant_id = ?',
+        'UPDATE inventory SET available_stock = available_stock + $1, sold_stock = sold_stock - $2 WHERE variant_id = $3',
         [returnObj.quantity, returnObj.quantity, returnObj.variant_id]
       );
 
-      // Log refund in payments table
       await run(
         `INSERT INTO payments (order_id, amount, payment_method, status, razorpay_payment_id)
-         VALUES (?, ?, 'REFUND', 'SUCCESS', ?)`,
+         VALUES ($1, $2, 'REFUND', 'SUCCESS', $3)`,
         [returnObj.order_id, refund_amount || returnObj.refund_amount, transaction_ref || `refund_${returnId}_${Date.now()}`]
       );
 
-      await run("UPDATE orders SET payment_status = 'REFUNDED', status = 'REFUNDED' WHERE id = ?", [returnObj.order_id]);
+      await run("UPDATE orders SET payment_status = 'REFUNDED', status = 'REFUNDED' WHERE id = $1", [returnObj.order_id]);
     }
 
     await logAuditAction(req, 'UPDATE_RETURN_STATUS', 'RETURN', returnId, null, { status, refund_amount });
@@ -316,42 +420,41 @@ router.get('/reviews', requireRole(['CONTENT_MANAGER', 'SUPPORT_MANAGER']), asyn
 router.put('/reviews/:id/status', requireRole(['CONTENT_MANAGER']), async (req, res, next) => {
   try {
     const { status } = req.body;
-    await run('UPDATE reviews SET status = ? WHERE id = ?', [status, req.params.id]);
+    await run('UPDATE reviews SET status = $1 WHERE id = $2', [status, req.params.id]);
     res.json({ success: true, message: `Review status updated to ${status}` });
   } catch (err) {
     next(err);
   }
 });
 
-// 7. System Error Logs, Error Spike Detector & Audit Logs
+// 7. System Error Logs & Audit Logs
 router.get('/system/error-logs', requireRole(['SUPER_ADMIN']), async (req, res, next) => {
   try {
     const { severity, status } = req.query;
     let sql = 'SELECT * FROM error_logs WHERE 1=1';
     const params = [];
+    let paramIdx = 1;
 
     if (severity) {
-      sql += ' AND severity = ?';
+      sql += ` AND severity = $${paramIdx++}`;
       params.push(severity);
     }
     if (status) {
-      sql += ' AND status = ?';
+      sql += ` AND status = $${paramIdx++}`;
       params.push(status);
     }
 
     sql += ' ORDER BY timestamp DESC LIMIT 100';
     const logs = await query(sql, params);
 
-    // Error Spike Detection Algorithm (FR-047):
-    // Counts ERROR and CRITICAL severity logs recorded in the last 15 minutes
     const spikeCheck = await get(
       `SELECT COUNT(id) as count FROM error_logs
        WHERE severity IN ('ERROR', 'CRITICAL')
-       AND timestamp >= datetime('now', '-15 minutes')`
+       AND timestamp >= NOW() - INTERVAL '15 minutes'`
     );
 
     const spikeCount = spikeCheck ? spikeCheck.count : 0;
-    const spikeDetected = spikeCount >= 3; // Spike threshold: 3+ errors in 15 mins
+    const spikeDetected = spikeCount >= 3;
 
     res.json({
       success: true,
@@ -370,17 +473,17 @@ router.get('/system/error-logs', requireRole(['SUPER_ADMIN']), async (req, res, 
   }
 });
 
-// Update Error Log Status (FR-046)
+// Update Error Log Status
 router.put('/system/error-logs/:id/status', requireRole(['SUPER_ADMIN']), async (req, res, next) => {
   try {
-    const { status } = req.body; // NEW, INVESTIGATING, RESOLVED, IGNORED
+    const { status } = req.body;
     const logId = req.params.id;
 
     if (!['NEW', 'INVESTIGATING', 'RESOLVED', 'IGNORED'].includes(status)) {
       return res.status(400).json({ success: false, error: 'Invalid log status' });
     }
 
-    await run('UPDATE error_logs SET status = ? WHERE id = ?', [status, logId]);
+    await run('UPDATE error_logs SET status = $1 WHERE id = $2', [status, logId]);
     await logAuditAction(req, 'UPDATE_ERROR_LOG_STATUS', 'ERROR_LOG', logId, null, { status });
 
     res.json({ success: true, message: `Error log status updated to ${status}` });
@@ -389,7 +492,7 @@ router.put('/system/error-logs/:id/status', requireRole(['SUPER_ADMIN']), async 
   }
 });
 
-// 8. Webhook Inspector & Retry Callback (FR-048, FR-049)
+// 8. Webhook Inspector & Retry
 router.get('/system/webhooks', requireRole(['SUPER_ADMIN']), async (req, res, next) => {
   try {
     const webhooks = await query('SELECT * FROM payment_events ORDER BY created_at DESC LIMIT 100');
@@ -402,16 +505,14 @@ router.get('/system/webhooks', requireRole(['SUPER_ADMIN']), async (req, res, ne
 router.post('/system/webhooks/:id/retry', requireRole(['SUPER_ADMIN']), async (req, res, next) => {
   try {
     const webhookId = req.params.id;
-    const event = await get('SELECT * FROM payment_events WHERE id = ?', [webhookId]);
+    const event = await get('SELECT * FROM payment_events WHERE id = $1', [webhookId]);
 
     if (!event) {
       return res.status(404).json({ success: false, error: 'Webhook event not found' });
     }
 
-    // Mark as re-processed
-    await run('UPDATE payment_events SET processed = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [webhookId]);
-
-    await logAuditAction(req, 'RETRY_WEBHOOK', 'PAYMENT_EVENT', webhookId, { processed: event.processed }, { processed: 1 });
+    await run('UPDATE payment_events SET processed = TRUE WHERE id = $1', [webhookId]);
+    await logAuditAction(req, 'RETRY_WEBHOOK', 'PAYMENT_EVENT', webhookId, { processed: event.processed }, { processed: true });
 
     res.json({
       success: true,

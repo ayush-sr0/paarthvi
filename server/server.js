@@ -1,10 +1,9 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
-
-import { initDb } from './db/database.js';
-import { seedDatabase } from './db/seeds.js';
 
 import authRoutes from './routes/authRoutes.js';
 import productRoutes from './routes/productRoutes.js';
@@ -22,6 +21,8 @@ import seoRoutes from './routes/seoRoutes.js';
 
 import { errorHandler } from './middleware/errorLogger.js';
 
+import { authenticateToken } from './middleware/auth.js';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -32,6 +33,7 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(authenticateToken);
 
 // Sitemap & Robots.txt Routes (Root level)
 app.use('/', seoRoutes);
@@ -68,7 +70,7 @@ app.get('*', (req, res, next) => {
     return next();
   }
   const indexPath = path.join(distPath, 'index.html');
-  if (require('fs').existsSync(indexPath)) {
+  if (fs.existsSync(indexPath)) {
     res.sendFile(indexPath);
   } else {
     res.send('Parthvi Ayurveda API Server Running on port ' + PORT);
@@ -78,15 +80,13 @@ app.get('*', (req, res, next) => {
 // Global Error Handler
 app.use(errorHandler);
 
-// Initialize DB and start server
+// Start server (DB is Supabase — no local init needed)
 const startServer = async () => {
   try {
-    await initDb();
-    await seedDatabase();
-
     app.listen(PORT, () => {
       console.log(`====================================================`);
       console.log(`  Parthvi Ayurveda E-Commerce Server Running`);
+      console.log(`  DB: Supabase PostgreSQL`);
       console.log(`  URL: http://localhost:${PORT}`);
       console.log(`  Health: http://localhost:${PORT}/api/health`);
       console.log(`====================================================`);

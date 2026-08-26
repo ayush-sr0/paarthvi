@@ -1,62 +1,47 @@
-import sqlite3 from 'sqlite3';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import pg from 'pg';
+import dotenv from 'dotenv';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+dotenv.config({ path: new URL('../../../.env', import.meta.url).pathname });
 
-const dbDir = path.join(__dirname, '../../data');
-if (!fs.existsSync(dbDir)) {
-  fs.mkdirSync(dbDir, { recursive: true });
-}
+const { Pool } = pg;
 
-const dbPath = path.join(dbDir, 'paarthvi.db');
-const db = new sqlite3.Database(dbPath);
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+});
 
-// Enable foreign keys
-db.run('PRAGMA foreign_keys = ON;');
+pool.on('error', (err) => {
+  console.error('Unexpected PostgreSQL pool error:', err);
+});
 
-export const query = (sql, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => {
-      if (err) reject(err);
-      else resolve(rows);
-    });
-  });
+/**
+ * Run a SELECT query — returns array of rows.
+ * Use $1, $2, ... placeholders (PostgreSQL style).
+ */
+export const query = async (sql, params = []) => {
+  const { rows } = await pool.query(sql, params);
+  return rows;
 };
 
-export const get = (sql, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => {
-      if (err) reject(err);
-      else resolve(row);
-    });
-  });
+/**
+ * Run a SELECT query — returns the first row only, or undefined.
+ * Use $1, $2, ... placeholders (PostgreSQL style).
+ */
+export const get = async (sql, params = []) => {
+  const { rows } = await pool.query(sql, params);
+  return rows[0];
 };
 
-export const run = (sql, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.run(sql, params, function (err) {
-      if (err) reject(err);
-      else resolve({ lastID: this.lastID, changes: this.changes });
-    });
-  });
+/**
+ * Run an INSERT / UPDATE / DELETE.
+ * For INSERTs that need the new row ID, append RETURNING id to the SQL.
+ * Returns { lastID, changes } to keep parity with the old SQLite wrapper.
+ */
+export const run = async (sql, params = []) => {
+  const result = await pool.query(sql, params);
+  const lastID = result.rows && result.rows[0] ? result.rows[0].id : null;
+  const changes = result.rowCount || 0;
+  return { lastID, changes };
 };
 
-export const initDb = async () => {
-  const schemaPath = path.join(__dirname, 'schema.sql');
-  const schemaSql = fs.readFileSync(schemaPath, 'utf-8');
-  
-  // Split statements by semicolon and run sequentially
-  const statements = schemaSql
-    .split(';')
-    .map(s => s.trim())
-    .filter(s => s.length > 0);
-
-  for (const statement of statements) {
-    await run(statement);
-  }
-};
-
-export default db;
+export default pool;

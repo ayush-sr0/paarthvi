@@ -200,6 +200,45 @@ export const api = {
     return res.json();
   },
 
+  async updateProduct(productId, productData) {
+    const res = await fetch(`${API_BASE}/admin/products/${productId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify(productData),
+    });
+    return res.json();
+  },
+
+  async deleteProduct(productId) {
+    const res = await fetch(`${API_BASE}/admin/products/${productId}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    });
+    return res.json();
+  },
+
+  async getProductImages(productId) {
+    const res = await fetch(`${API_BASE}/admin/products/${productId}/images`, { headers: getAuthHeaders() });
+    return res.json();
+  },
+
+  async addProductImage(productId, imageUrl) {
+    const res = await fetch(`${API_BASE}/admin/products/${productId}/images`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify({ image_url: imageUrl }),
+    });
+    return res.json();
+  },
+
+  async deleteProductImage(productId, imageId) {
+    const res = await fetch(`${API_BASE}/admin/products/${productId}/images/${imageId}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    });
+    return res.json();
+  },
+
   async getAdminInventory() {
     const res = await fetch(`${API_BASE}/admin/inventory`, { headers: getAuthHeaders() });
     return res.json();
