@@ -2,8 +2,9 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { query, get, run } from '../db/database.js';
+import pool, { query, get, run } from '../db/database.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -248,18 +249,58 @@ router.put('/products/:id', requireRole(['PRODUCT_MANAGER']), async (req, res, n
 
 // Delete Product
 router.delete('/products/:id', requireRole(['PRODUCT_MANAGER']), async (req, res, next) => {
+  const client = await pool.connect();
   try {
     const productId = req.params.id;
-    const prev = await get('SELECT name, slug FROM products WHERE id = $1', [productId]);
-    if (!prev) return res.status(404).json({ success: false, error: 'Product not found' });
+    await client.query('BEGIN');
 
-    await run('DELETE FROM products WHERE id = $1', [productId]);
+    const prevRes = await client.query('SELECT name, slug FROM products WHERE id = $1 FOR UPDATE', [productId]);
+    const prev = prevRes.rows[0];
+    if (!prev) {
+      await client.query('ROLLBACK');
+      client.release();
+      return res.status(404).json({ success: false, error: 'Product not found' });
+    }
+
+    // Collect all variant IDs for this product within the transaction
+    const variantsRes = await client.query('SELECT id FROM product_variants WHERE product_id = $1', [productId]);
+    const variantIds = variantsRes.rows.map(v => v.id);
+
+    // Delete all NO ACTION FK children in transaction-safe order before deleting product.
+
+    // order_items are intentionally preserved — we null the references so historical order records remain intact.
+    await client.query('DELETE FROM batches WHERE product_id = $1', [productId]);
+    await client.query('UPDATE order_items SET product_id = NULL WHERE product_id = $1', [productId]);
+
+    if (variantIds.length > 0) {
+      const placeholders = variantIds.map((_, i) => `$${i + 1}`).join(', ');
+      await client.query(`DELETE FROM inventory_transactions WHERE variant_id IN (${placeholders})`, variantIds);
+      await client.query(`DELETE FROM cart_items WHERE variant_id IN (${placeholders})`, variantIds);
+      await client.query(`DELETE FROM batches WHERE variant_id IN (${placeholders})`, variantIds);
+      await client.query(`UPDATE order_items SET variant_id = NULL WHERE variant_id IN (${placeholders})`, variantIds);
+    }
+
+    // Now delete the product — product_images, product_variants, reviews, wishlist_items
+    // will cascade automatically (CASCADE FK rules already in place).
+    await client.query('DELETE FROM products WHERE id = $1', [productId]);
+
+    await client.query('COMMIT');
+    client.release();
+
     await logAuditAction(req, 'DELETE_PRODUCT', 'PRODUCT', productId, prev, null);
     res.json({ success: true, message: `Product "${prev.name}" deleted` });
   } catch (err) {
+    try {
+      await client.query('ROLLBACK');
+    } catch (rollbackErr) {
+      console.error('Transaction rollback error:', rollbackErr);
+    }
+    client.release();
     next(err);
   }
 });
+
+
 
 // Add image to product gallery
 router.post('/products/:id/images', requireRole(['PRODUCT_MANAGER']), async (req, res, next) => {
@@ -399,10 +440,11 @@ router.put('/returns/:id/status', requireRole(['ORDER_MANAGER']), async (req, re
       );
 
       await run(
-        `INSERT INTO payments (order_id, amount, payment_method, status, razorpay_payment_id)
-         VALUES ($1, $2, 'REFUND', 'SUCCESS', $3)`,
-        [returnObj.order_id, refund_amount || returnObj.refund_amount, transaction_ref || `refund_${returnId}_${Date.now()}`]
+        `INSERT INTO payments (order_id, amount, payment_method, status)
+         VALUES ($1, $2, 'REFUND', 'SUCCESS')`,
+        [returnObj.order_id, refund_amount || returnObj.refund_amount]
       );
+
 
       await run("UPDATE orders SET payment_status = 'REFUNDED', status = 'REFUNDED' WHERE id = $1", [returnObj.order_id]);
     }

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
-import { Shield, Package, ShoppingBag, Layers, RefreshCw, Star, AlertTriangle, Activity, FileText, CheckCircle, Search, Plus, Edit, Trash2, HelpCircle, MessageSquare, Send, X, Image as ImageIcon, BookOpen, TrendingUp, Search as SearchIcon, Award, UserCheck } from 'lucide-react';
+import { Shield, Package, ShoppingBag, Layers, RefreshCw, Star, AlertTriangle, Activity, FileText, CheckCircle, Search, Plus, Edit, Trash2, HelpCircle, MessageSquare, Send, X, Image as ImageIcon, BookOpen, TrendingUp, Search as SearchIcon, Award, UserCheck, Truck, Printer, ExternalLink } from 'lucide-react';
+
 
 export const AdminDashboardPage = () => {
   const { user, login } = useAuth();
@@ -96,6 +97,10 @@ export const AdminDashboardPage = () => {
   const [errorSeverityFilter, setErrorSeverityFilter] = useState('');
   const [errorSpikeInfo, setErrorSpikeInfo] = useState(null);
   const [selectedRawWebhook, setSelectedRawWebhook] = useState(null);
+
+  // Selloship Shipping Modal State
+  const [trackingModalData, setTrackingModalData] = useState({ open: false, waybill: '', tracking: null });
+  const [manifestModalData, setManifestModalData] = useState({ open: false, manifestNumber: null, downloadUrl: null });
 
   // Product Add Modal State
   const [showAddProductModal, setShowAddProductModal] = useState(false);
@@ -281,6 +286,54 @@ export const AdminDashboardPage = () => {
     }
   };
 
+  // Selloship 2.0 Shipping Handlers
+  const handleCreateWaybill = async (orderId) => {
+    const res = await api.createSelloshipWaybill(orderId);
+    if (res.success) {
+      alert(`Selloship Waybill generated: ${res.waybill} (${res.courier_name})`);
+      const updated = await api.getAdminOrders(orderStatusFilter);
+      if (updated.success) setAdminOrders(updated.orders || []);
+    } else {
+      alert(`Waybill creation failed: ${res.error || 'Unknown error'}`);
+    }
+  };
+
+  const handleCancelWaybill = async (orderId) => {
+    if (!confirm('Are you sure you want to cancel this Selloship waybill?')) return;
+    const res = await api.cancelSelloshipWaybill(orderId);
+    if (res.success) {
+      alert(res.message || 'Waybill cancelled successfully');
+      const updated = await api.getAdminOrders(orderStatusFilter);
+      if (updated.success) setAdminOrders(updated.orders || []);
+    } else {
+      alert(`Cancellation failed: ${res.error || 'Unknown error'}`);
+    }
+  };
+
+  const handleTrackPackage = async (waybill) => {
+    const res = await api.trackSelloshipPackage(waybill);
+    if (res.success) {
+      setTrackingModalData({ open: true, waybill, tracking: res.tracking });
+    } else {
+      alert('Failed to retrieve parcel tracking details');
+    }
+  };
+
+  const handleGenerateManifest = async () => {
+    const waybillsToManifest = adminOrders.filter((o) => o.waybill).map((o) => o.waybill);
+    if (waybillsToManifest.length === 0) {
+      alert('No orders with active Selloship waybills found to generate manifest.');
+      return;
+    }
+    const res = await api.generateSelloshipManifest(waybillsToManifest);
+    if (res.success) {
+      setManifestModalData({ open: true, manifestNumber: res.manifestNumber, downloadUrl: res.manifestDownloadUrl });
+    } else {
+      alert('Failed to generate manifest');
+    }
+  };
+
+
   const handleCreateProduct = async (e) => {
     e.preventDefault();
     const res = await api.createProduct(newProd);
@@ -340,6 +393,9 @@ export const AdminDashboardPage = () => {
     if (!confirm(`Delete "${product.name}"? This will also remove all variants and images.`)) return;
     const res = await api.deleteProduct(product.id);
     if (res.success) {
+      // Remove immediately from local state so the list updates without waiting for a refetch.
+      setAdminProducts(prev => prev.filter(p => p.id !== product.id));
+      // Sync in background to pick up any server-side changes.
       api.getAdminProducts().then(data => {
         if (data.success) setAdminProducts(data.products || []);
       });
@@ -347,6 +403,7 @@ export const AdminDashboardPage = () => {
       alert(`Delete failed: ${res.error}`);
     }
   };
+
 
   const handleAddImage = async () => {
     if (!newImageUrl.trim() || !editProd) return;
@@ -602,61 +659,178 @@ export const AdminDashboardPage = () => {
         </div>
       )}
 
-      {/* Tab 2: Orders State Machine */}
+      {/* Tab 2: Orders State Machine & Selloship 2.0 Integration */}
       {activeTab === 'orders' && (
         <div className="space-y-4 animate-in fade-in duration-200">
-          <div className="flex items-center justify-between">
-            <h3 className="font-display text-xl font-bold text-primary">Order State Machine</h3>
-            <select
-              value={orderStatusFilter}
-              onChange={(e) => setOrderStatusFilter(e.target.value)}
-              className="px-3 py-1.5 bg-surface border border-outline/30 rounded-lg text-xs font-label uppercase"
-            >
-              <option value="">All Statuses</option>
-              <option value="PENDING">PENDING</option>
-              <option value="CONFIRMED">CONFIRMED</option>
-              <option value="PROCESSING">PROCESSING</option>
-              <option value="PACKED">PACKED</option>
-              <option value="SHIPPED">SHIPPED</option>
-              <option value="OUT_FOR_DELIVERY">OUT_FOR_DELIVERY</option>
-              <option value="DELIVERED">DELIVERED</option>
-              <option value="CANCELLED">CANCELLED</option>
-            </select>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-surface p-4 rounded-xl border border-outline/20">
+            <div>
+              <h3 className="font-display text-xl font-bold text-primary flex items-center gap-2">
+                <Truck className="text-gold-leaf" size={22} /> Order & Selloship Fulfillment
+              </h3>
+              <p className="text-xs text-on-surface-variant">Automated waybill generation, PDF shipping labels, and live tracking powered by Selloship 2.0</p>
+            </div>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <button
+                onClick={handleGenerateManifest}
+                className="bg-gold-leaf/20 hover:bg-gold-leaf/30 text-primary border border-gold-leaf/40 text-xs font-bold font-label px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors"
+                title="Generate consolidated manifest PDF for packed/shipped orders"
+              >
+                <Printer size={15} /> Batch Manifest PDF
+              </button>
+              <select
+                value={orderStatusFilter}
+                onChange={(e) => setOrderStatusFilter(e.target.value)}
+                className="px-3 py-1.5 bg-surface-container border border-outline/30 rounded-lg text-xs font-label uppercase outline-none focus:border-gold-leaf"
+              >
+                <option value="">All Statuses</option>
+                <option value="PENDING">PENDING</option>
+                <option value="CONFIRMED">CONFIRMED</option>
+                <option value="PROCESSING">PROCESSING</option>
+                <option value="PACKED">PACKED</option>
+                <option value="SHIPPED">SHIPPED</option>
+                <option value="OUT_FOR_DELIVERY">OUT_FOR_DELIVERY</option>
+                <option value="DELIVERED">DELIVERED</option>
+                <option value="CANCELLED">CANCELLED</option>
+              </select>
+            </div>
           </div>
 
-          <div className="bg-surface rounded-2xl border border-outline/20 overflow-hidden divide-y divide-outline/10">
+          <div className="bg-surface rounded-2xl border border-outline/20 overflow-hidden divide-y divide-outline/10 shadow-sm">
             {adminOrders.map((o) => (
-              <div key={o.id} className="p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs font-body">
-                <div>
-                  <span className="font-bold text-primary font-label text-sm block">{o.order_number}</span>
-                  <p className="text-on-surface">{o.guest_name} ({o.guest_phone})</p>
-                  <p className="text-on-surface-variant">Method: {o.payment_method} | Paid: {o.payment_status}</p>
+              <div key={o.id} className="p-4 sm:p-5 space-y-3 font-body text-xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-primary font-label text-sm">{o.order_number}</span>
+                      {o.waybill && (
+                        <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-700 border border-emerald-500/30 rounded text-[10px] font-bold font-mono">
+                          AWB: {o.waybill} ({o.courier_name || 'Selloship Partner'})
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-on-surface mt-0.5">{o.guest_name || 'Customer'} ({o.guest_phone || 'No phone'})</p>
+                    <p className="text-on-surface-variant">Method: <strong className="text-primary">{o.payment_method}</strong> | Payment Status: <strong className="text-primary">{o.payment_status}</strong></p>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <span className="font-display text-base font-bold text-primary">₹{o.total_amount}</span>
+                    <select
+                      value={o.status}
+                      onChange={(e) => handleUpdateOrderStatus(o.id, e.target.value)}
+                      className="px-3 py-1.5 bg-surface-container border border-gold-leaf/40 rounded-lg font-label font-bold text-primary text-xs"
+                    >
+                      <option value="PENDING">PENDING</option>
+                      <option value="CONFIRMED">CONFIRMED</option>
+                      <option value="PROCESSING">PROCESSING</option>
+                      <option value="PACKED">PACKED</option>
+                      <option value="SHIPPED">SHIPPED</option>
+                      <option value="OUT_FOR_DELIVERY">OUT_FOR_DELIVERY</option>
+                      <option value="DELIVERED">DELIVERED</option>
+                      <option value="CANCELLED">CANCELLED</option>
+                      <option value="RETURN_APPROVED">RETURN_APPROVED</option>
+                      <option value="REFUNDED">REFUNDED</option>
+                    </select>
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-4">
-                  <span className="font-display text-base font-bold text-primary">₹{o.total_amount}</span>
-                  <select
-                    value={o.status}
-                    onChange={(e) => handleUpdateOrderStatus(o.id, e.target.value)}
-                    className="px-3 py-1.5 bg-surface-container border border-gold-leaf/40 rounded-lg font-label font-bold text-primary text-xs"
-                  >
-                    <option value="PENDING">PENDING</option>
-                    <option value="CONFIRMED">CONFIRMED</option>
-                    <option value="PROCESSING">PROCESSING</option>
-                    <option value="PACKED">PACKED</option>
-                    <option value="SHIPPED">SHIPPED</option>
-                    <option value="OUT_FOR_DELIVERY">OUT_FOR_DELIVERY</option>
-                    <option value="DELIVERED">DELIVERED</option>
-                    <option value="CANCELLED">CANCELLED</option>
-                    <option value="RETURN_APPROVED">RETURN_APPROVED</option>
-                    <option value="REFUNDED">REFUNDED</option>
-                  </select>
+                {/* Selloship 2.0 Action Toolbar */}
+                <div className="pt-2 border-t border-outline/10 flex flex-wrap items-center justify-between gap-2 bg-surface-container/30 p-2.5 rounded-lg">
+                  {o.waybill ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <a
+                        href={o.shipping_label_url || `https://selloship.com/labels/${o.waybill}.pdf`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="bg-primary text-on-primary hover:bg-primary-hover px-2.5 py-1 rounded text-[11px] font-bold font-label flex items-center gap-1 transition-colors"
+                      >
+                        <FileText size={13} /> Shipping Label PDF <ExternalLink size={11} />
+                      </a>
+                      <button
+                        onClick={() => handleTrackPackage(o.waybill)}
+                        className="bg-surface border border-outline/40 text-on-surface hover:border-gold-leaf px-2.5 py-1 rounded text-[11px] font-semibold flex items-center gap-1 transition-colors"
+                      >
+                        <Truck size={13} className="text-gold-leaf" /> Track Parcel
+                      </button>
+                      <button
+                        onClick={() => handleCancelWaybill(o.id)}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded text-[11px] font-medium transition-colors"
+                      >
+                        Cancel Waybill
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between w-full">
+                      <span className="text-on-surface-variant italic">No waybill generated yet</span>
+                      <button
+                        onClick={() => handleCreateWaybill(o.id)}
+                        className="bg-gold-leaf text-primary font-bold font-label text-[11px] px-3 py-1.5 rounded-md hover:bg-gold-leaf/90 flex items-center gap-1 shadow-sm transition-colors"
+                      >
+                        <Package size={14} /> Generate Waybill & Label (Selloship 2.0)
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
           </div>
+
+          {/* Tracking Modal */}
+          {trackingModalData.open && (
+            <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="bg-surface rounded-2xl w-full max-w-lg p-6 space-y-4 shadow-2xl border border-gold-leaf/40 relative">
+                <button onClick={() => setTrackingModalData({ open: false, waybill: '', tracking: null })} className="absolute top-4 right-4 text-on-surface-variant hover:text-primary"><X size={20} /></button>
+                <h3 className="font-display text-lg font-bold text-primary flex items-center gap-2"><Truck className="text-gold-leaf" size={20} /> Live Selloship Tracking</h3>
+                
+                <div className="space-y-3 font-body text-xs">
+                  <div className="bg-surface-container p-3 rounded-lg flex items-center justify-between">
+                    <div>
+                      <p className="text-on-surface-variant">Waybill (AWB): <strong className="text-primary font-mono">{trackingModalData.waybill}</strong></p>
+                      <p className="text-on-surface-variant">Carrier: <strong className="text-primary">{trackingModalData.tracking?.carrier || 'Delhivery'}</strong></p>
+                    </div>
+                    <span className="px-2.5 py-1 bg-gold-leaf/20 text-primary font-bold rounded-full text-[10px]">
+                      {trackingModalData.tracking?.currentStatus || 'IN_TRANSIT'}
+                    </span>
+                  </div>
+
+                  <h4 className="font-label font-bold text-primary text-xs uppercase pt-2">Status Timeline</h4>
+                  <div className="space-y-2 border-l-2 border-gold-leaf/40 pl-3">
+                    {(trackingModalData.tracking?.events || []).map((ev, idx) => (
+                      <div key={idx} className="relative">
+                        <div className="w-2 h-2 rounded-full bg-gold-leaf absolute -left-[17px] top-1" />
+                        <p className="font-bold text-primary">{ev.status}</p>
+                        <p className="text-on-surface-variant text-[11px]">{ev.location} • {new Date(ev.timestamp).toLocaleString()}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Manifest Modal */}
+          {manifestModalData.open && (
+            <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="bg-surface rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl border border-gold-leaf/40 relative text-center">
+                <button onClick={() => setManifestModalData({ open: false, manifestNumber: null, downloadUrl: null })} className="absolute top-4 right-4 text-on-surface-variant hover:text-primary"><X size={20} /></button>
+                <Printer className="mx-auto text-gold-leaf" size={36} />
+                <h3 className="font-display text-lg font-bold text-primary">Manifest Generated</h3>
+                <p className="text-xs text-on-surface-variant">Manifest Number: <strong className="text-primary font-mono">{manifestModalData.manifestNumber}</strong></p>
+                <div className="pt-3">
+                  <a
+                    href={manifestModalData.downloadUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 bg-primary text-on-primary px-5 py-2.5 rounded-full font-label font-bold text-xs uppercase shadow-md hover:bg-primary-hover transition-all"
+                  >
+                    <FileText size={16} /> Download Manifest PDF
+                  </a>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
+
 
       {/* Tab 3: Products & Variants */}
       {activeTab === 'products' && (
@@ -1784,7 +1958,8 @@ export const AdminDashboardPage = () => {
           <div className="bg-surface p-6 rounded-2xl border border-outline/20 space-y-4 text-xs font-body">
             <div className="border-b border-outline/10 pb-3">
               <h4 className="font-display text-base font-bold text-primary">Webhook Inspector & Callback Retry</h4>
-              <p className="text-[11px] text-on-surface-variant">Review raw Razorpay webhook event payloads and re-trigger processing</p>
+              <p className="text-[11px] text-on-surface-variant">Review raw Cashfree webhook event payloads and re-trigger processing</p>
+
             </div>
 
             <div className="divide-y divide-outline/10 max-h-72 overflow-y-auto">

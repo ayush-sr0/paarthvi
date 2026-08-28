@@ -31,12 +31,101 @@ export const CheckoutPage = () => {
 
   const [pincodeStatus, setPincodeStatus] = useState(null);
 
-  // Payment Method State
-  const [paymentMethod, setPaymentMethod] = useState('RAZORPAY'); // RAZORPAY or COD
+  // Payment Method State (CASHFREE or COD)
+  const [paymentMethod, setPaymentMethod] = useState('CASHFREE');
+
+  // Cashfree Modal State
+  const [cashfreeModal, setCashfreeModal] = useState({
+
+    open: false,
+    orderId: null,
+    orderNumber: null,
+    amount: 0,
+    cfOrderId: null,
+  });
+  const [cashfreePaymentType, setCashfreePaymentType] = useState('UPI');
+
+  const handleCashfreeVerification = async (orderId, cfOrderId, cfPaymentId, orderNumber, amount) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const verifyRes = await api.verifyCashfreePayment({
+        order_id: orderId,
+        cf_order_id: cfOrderId,
+        cf_payment_id: cfPaymentId || `cf_pay_${Date.now()}`,
+      });
+
+      if (verifyRes.success) {
+        setPlacedOrder({
+          order_id: orderId,
+          order_number: orderNumber || verifyRes.order_number || `ORD-${orderId}`,
+          invoice_number: verifyRes.invoice_number,
+          amount: amount || verifyRes.amount || 0,
+          payment_method: 'CASHFREE',
+          status: 'CONFIRMED',
+        });
+
+        try {
+          const invRes = await api.getInvoice(orderId);
+          if (invRes.success) setInvoiceData(invRes.invoice);
+        } catch (invErr) {
+          console.warn('Failed to fetch invoice details:', invErr.message);
+        }
+
+        clearCart();
+        setCashfreeModal({ open: false, orderId: null, orderNumber: null, amount: 0, cfOrderId: null });
+        setStep(7);
+      } else {
+        setError(verifyRes.error || 'Cashfree payment verification failed');
+      }
+    } catch (err) {
+      setError(err.message || 'Payment verification failed');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Placed Order State
   const [placedOrder, setPlacedOrder] = useState(null);
   const [invoiceData, setInvoiceData] = useState(null);
+
+  // Handle Cashfree Web Redirect return callback URL (?payment_status=SUCCESS&order_id=...)
+  useEffect(() => {
+    const queryParams = new URLSearchParams(window.location.search);
+    const paymentStatus = queryParams.get('payment_status');
+    const returnOrderId = queryParams.get('order_id');
+
+    if (paymentStatus === 'SUCCESS' && returnOrderId) {
+      setLoading(true);
+      setError(null);
+      api.getInvoice(returnOrderId)
+        .then((invRes) => {
+          if (invRes.success && invRes.invoice) {
+            const inv = invRes.invoice;
+            const totalAmt = inv.pricing?.total_amount ?? 0;
+            setInvoiceData(inv);
+            setPlacedOrder({
+              order_id: returnOrderId,
+              order_number: inv.order_number || `ORD-${returnOrderId}`,
+              invoice_number: inv.invoice_number,
+              amount: totalAmt,
+              payment_method: 'CASHFREE',
+              status: 'CONFIRMED',
+            });
+            clearCart();
+            setStep(7);
+          } else {
+            setError(invRes.error || 'Failed to retrieve order confirmation details');
+          }
+        })
+        .catch((err) => {
+          setError(err.message || 'Error processing order confirmation callback');
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    }
+  }, []);
 
   // Pincode validation effect
   useEffect(() => {
@@ -77,93 +166,62 @@ export const CheckoutPage = () => {
         return;
       }
 
-      if (paymentMethod === 'RAZORPAY') {
-        // Trigger Razorpay Sandbox modal
-        const options = {
-          key: res.key_id || 'rzp_test_ParthviAyurveda2026',
-          amount: Math.round(res.amount * 100),
-          currency: 'INR',
-          name: 'Parthvi Ayurveda',
-          description: `Payment for Order ${res.order_number}`,
-          image: '/products/chyawanprash.jpg',
+      if (paymentMethod === 'CASHFREE') {
+        const cfSessionId = res.payment_session_id;
+        const cfOrderId = res.cf_order_id;
+        const isSimulated = !!res.is_simulated;
 
-          order_id: res.razorpay_order_id,
-          handler: async function (response) {
-            // Verify payment
-            const verifyRes = await api.verifyPayment({
-              order_id: res.order_id,
-              razorpay_order_id: response.razorpay_order_id || res.razorpay_order_id,
-              razorpay_payment_id: response.razorpay_payment_id || `pay_mock_${Date.now()}`,
-              razorpay_signature: response.razorpay_signature || 'mock_signature',
-            });
+        if (isSimulated && import.meta.env.DEV) {
+          setCashfreeModal({
+            open: true,
+            orderId: res.order_id,
+            orderNumber: res.order_number,
+            amount: res.amount,
+            cfOrderId: cfOrderId,
+          });
+          setLoading(false);
+          return;
+        }
 
-            if (verifyRes.success) {
-              setPlacedOrder({
-                order_id: res.order_id,
-                order_number: res.order_number,
-                invoice_number: verifyRes.invoice_number,
-                amount: res.amount,
-                payment_method: 'RAZORPAY',
-                status: 'CONFIRMED',
-              });
+        const rawEnv = (res.environment || '').toLowerCase().trim();
+        const validEnv = (rawEnv === 'production' || rawEnv === 'sandbox') ? rawEnv : null;
 
-              // Fetch GST invoice
-              const invRes = await api.getInvoice(res.order_id);
-              if (invRes.success) setInvoiceData(invRes.invoice);
+        if (!validEnv) {
+          setError('Invalid Cashfree environment configuration received');
+          setLoading(false);
+          return;
+        }
 
-              clearCart();
-              setStep(7);
-            } else {
-              setError(verifyRes.error || 'Payment verification failed');
-            }
-            setLoading(false);
-          },
-          modal: {
-            ondismiss: function () {
+        if (window.Cashfree && cfSessionId) {
+          try {
+            const cashfree = window.Cashfree({ mode: validEnv });
+            cashfree.checkout({
+              paymentSessionId: cfSessionId,
+              redirectTarget: '_self',
+            }).then(async (result) => {
+              if (result.error) {
+                console.warn('Cashfree SDK notice:', result.error);
+                setError(result.error.message || 'Payment window could not be completed');
+                setLoading(false);
+              }
+            }).catch((err) => {
+              console.warn('Cashfree checkout error:', err);
+              setError(err.message || 'Payment checkout error');
               setLoading(false);
-              setError('Payment window closed before completion');
-            },
-          },
-          prefill: {
-            name: contact.name,
-            email: contact.email,
-            contact: contact.phone,
-          },
-          theme: { color: '#16351d' },
-        };
-
-        if (window.Razorpay) {
-          const rzp = new window.Razorpay(options);
-          rzp.open();
-        } else {
-          // Fallback simulation for sandbox if script blocked
-          setTimeout(async () => {
-            const verifyRes = await api.verifyPayment({
-              order_id: res.order_id,
-              razorpay_order_id: res.razorpay_order_id,
-              razorpay_payment_id: `pay_simulated_${Date.now()}`,
-              razorpay_signature: 'simulated_signature',
             });
-            if (verifyRes.success) {
-              setPlacedOrder({
-                order_id: res.order_id,
-                order_number: res.order_number,
-                invoice_number: verifyRes.invoice_number,
-                amount: res.amount,
-                payment_method: 'RAZORPAY',
-                status: 'CONFIRMED',
-              });
-
-              const invRes = await api.getInvoice(res.order_id);
-              if (invRes.success) setInvoiceData(invRes.invoice);
-
-              clearCart();
-              setStep(7);
-            }
+          } catch (e) {
+            setError(e.message || 'Failed to initialize Cashfree checkout');
             setLoading(false);
-          }, 1500);
+          }
+        } else {
+          setError('Cashfree SDK unavailable or invalid payment session');
+          setLoading(false);
         }
       } else {
+
+
+
+
         // COD Order placed
         setPlacedOrder({
           order_id: res.order_id,
@@ -181,13 +239,36 @@ export const CheckoutPage = () => {
         setStep(7);
         setLoading(false);
       }
+
     } catch (err) {
       setError(err.message || 'An unexpected error occurred during checkout');
       setLoading(false);
     }
   };
 
+  if ((!cartSummary || !cartSummary.items || cartSummary.items.length === 0) && !placedOrder) {
+
+    return (
+      <div className="max-w-xl mx-auto px-margin-mobile md:px-margin-desktop py-16 text-center space-y-6">
+        <div className="w-16 h-16 rounded-full bg-surface-container text-on-surface-variant mx-auto flex items-center justify-center">
+          <Truck size={32} />
+        </div>
+        <h2 className="font-display text-2xl font-bold text-primary">Your Cart is Currently Empty</h2>
+        <p className="font-body text-xs text-on-surface-variant">
+          Add authentic Ayurvedic formulations to your cart before proceeding to express checkout.
+        </p>
+        <Link
+          to="/shop"
+          className="inline-block bg-primary text-on-primary font-label text-xs font-bold uppercase tracking-wider px-8 py-3.5 rounded-full hover:bg-primary-container transition-colors shadow-md"
+        >
+          Explore Herbal Shop
+        </Link>
+      </div>
+    );
+  }
+
   if (step === 7 && placedOrder) {
+
     return (
       <div className="max-w-3xl mx-auto px-margin-mobile md:px-margin-desktop py-12 space-y-8 text-center animate-in fade-in duration-300">
         <div className="w-20 h-20 rounded-full bg-primary-container/20 text-primary mx-auto flex items-center justify-center border-2 border-gold-leaf shadow-lg">
@@ -411,20 +492,22 @@ export const CheckoutPage = () => {
 
             <div className="space-y-3 font-body text-xs">
               <label
-                onClick={() => setPaymentMethod('RAZORPAY')}
+                onClick={() => setPaymentMethod('CASHFREE')}
                 className={`p-4 rounded-xl border flex items-center justify-between cursor-pointer transition-colors ${
-                  paymentMethod === 'RAZORPAY' ? 'border-gold-leaf bg-gold-leaf/10' : 'border-outline/20 hover:border-gold-leaf'
+                  paymentMethod === 'CASHFREE' ? 'border-gold-leaf bg-gold-leaf/10' : 'border-outline/20 hover:border-gold-leaf'
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <CreditCard className="text-primary" size={20} />
+                  <ShieldCheck className="text-primary" size={20} />
                   <div>
-                    <span className="font-bold text-on-surface block">Razorpay Payment Gateway</span>
-                    <span className="text-on-surface-variant text-[11px]">UPI (Google Pay, PhonePe, Paytm), Credit/Debit Cards, NetBanking</span>
+                    <span className="font-bold text-on-surface flex items-center gap-2">
+                      Cashfree Payment Gateway <span className="bg-gold-leaf/20 text-primary text-[10px] px-2 py-0.5 rounded font-mono font-bold">SANDBOX TEST</span>
+                    </span>
+                    <span className="text-on-surface-variant text-[11px]">Instant UPI (Google Pay, PhonePe, Paytm), Cards, NetBanking via Cashfree v3</span>
                   </div>
                 </div>
-                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'RAZORPAY' ? 'border-gold-leaf bg-gold-leaf' : 'border-outline/40'}`}>
-                  {paymentMethod === 'RAZORPAY' && <div className="w-1.5 h-1.5 rounded-full bg-white"></div>}
+                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'CASHFREE' ? 'border-gold-leaf bg-gold-leaf' : 'border-outline/40'}`}>
+                  {paymentMethod === 'CASHFREE' && <div className="w-1.5 h-1.5 rounded-full bg-white"></div>}
                 </div>
               </label>
 
@@ -445,7 +528,9 @@ export const CheckoutPage = () => {
                   {paymentMethod === 'COD' && <div className="w-1.5 h-1.5 rounded-full bg-white"></div>}
                 </div>
               </label>
+
             </div>
+
           </div>
 
           <button
@@ -513,9 +598,117 @@ export const CheckoutPage = () => {
             </div>
           </div>
         </div>
-
       </div>
 
+
+      {/* Cashfree Sandbox Payment Simulation Modal (DEV builds only) */}
+      {import.meta.env.DEV && cashfreeModal.open && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-surface rounded-2xl border border-gold-leaf/40 shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="bg-primary text-on-primary p-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="text-gold-leaf" size={24} />
+                <div>
+                  <h4 className="font-display font-bold text-sm tracking-wide">CASHFREE PAYMENTS</h4>
+                  <p className="text-[10px] text-gold-leaf uppercase font-mono font-semibold">Sandbox Checkout Gateway v3</p>
+                </div>
+              </div>
+              <span className="bg-gold-leaf/20 text-gold-leaf text-[10px] px-2 py-1 rounded font-bold font-mono uppercase">TEST MODE</span>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-5 text-xs font-body">
+              <div className="bg-surface-container rounded-xl p-4 border border-outline/20 space-y-2">
+                <div className="flex justify-between text-on-surface-variant">
+                  <span>Merchant:</span>
+                  <span className="font-bold text-primary">Parthvi Ayurveda D2C</span>
+                </div>
+                <div className="flex justify-between text-on-surface-variant">
+                  <span>Order Reference:</span>
+                  <span className="font-mono text-on-surface">{cashfreeModal.orderNumber || `ORD-${cashfreeModal.orderId}`}</span>
+                </div>
+                <div className="flex justify-between items-center text-on-surface pt-2 border-t border-outline/10">
+                  <span className="font-bold text-sm">Amount to Pay:</span>
+                  <span className="font-display font-bold text-xl text-primary">₹{cashfreeModal.amount}</span>
+                </div>
+              </div>
+
+              {/* Payment Option Tabs */}
+              <div>
+                <p className="font-semibold text-on-surface mb-2">Select Sandbox Payment Option:</p>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCashfreePaymentType('UPI')}
+                    className={`py-2 px-3 rounded-lg border text-center font-semibold transition-colors ${
+                      cashfreePaymentType === 'UPI' ? 'border-gold-leaf bg-gold-leaf/20 text-primary font-bold' : 'border-outline/30 text-on-surface-variant'
+                    }`}
+                  >
+                    UPI / GPay
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCashfreePaymentType('CARD')}
+                    className={`py-2 px-3 rounded-lg border text-center font-semibold transition-colors ${
+                      cashfreePaymentType === 'CARD' ? 'border-gold-leaf bg-gold-leaf/20 text-primary font-bold' : 'border-outline/30 text-on-surface-variant'
+                    }`}
+                  >
+                    Cards
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCashfreePaymentType('NETBANKING')}
+                    className={`py-2 px-3 rounded-lg border text-center font-semibold transition-colors ${
+                      cashfreePaymentType === 'NETBANKING' ? 'border-gold-leaf bg-gold-leaf/20 text-primary font-bold' : 'border-outline/30 text-on-surface-variant'
+                    }`}
+                  >
+                    NetBanking
+                  </button>
+                </div>
+              </div>
+
+              <div className="bg-gold-leaf/10 p-3 rounded-lg border border-gold-leaf/30 text-[11px] text-on-surface-variant">
+                <p className="font-bold text-primary mb-1">
+                  {cashfreePaymentType === 'UPI' && '✓ Simulated Cashfree VPA: success@cashfree'}
+                  {cashfreePaymentType === 'CARD' && '✓ Simulated Test Card: 4111 •••• •••• 1111'}
+                  {cashfreePaymentType === 'NETBANKING' && '✓ Simulated NetBanking: HDFC / ICICI / SBI'}
+                </p>
+                <p>Click below to simulate an instant successful payment response from Cashfree Sandbox servers.</p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="space-y-2 pt-2">
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => handleCashfreeVerification(
+                    cashfreeModal.orderId,
+                    cashfreeModal.cfOrderId,
+                    `cf_pay_simulated_${Date.now()}`,
+                    cashfreeModal.orderNumber,
+                    cashfreeModal.amount
+                  )}
+                  className="w-full bg-primary text-on-primary py-3 rounded-xl font-bold uppercase tracking-wider hover:bg-primary-container transition-colors shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {loading ? 'Verifying Cashfree Response...' : `✓ Complete Cashfree Payment (₹${cashfreeModal.amount})`}
+                </button>
+
+
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => setCashfreeModal({ open: false, orderId: null, orderNumber: null, amount: 0, cfOrderId: null })}
+                  className="w-full py-2.5 text-on-surface-variant hover:text-error transition-colors text-center font-medium"
+                >
+                  Cancel Transaction
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+
   );
 };

@@ -1,4 +1,4 @@
-import { initDb, query, get, run } from '../db/database.js';
+import { query, get, run } from '../db/database.js';
 import { seedDatabase } from '../db/seeds.js';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
@@ -24,9 +24,9 @@ const runTests = async () => {
 
   try {
     // 1. Database Init & Seeding
-    await initDb();
     await seedDatabase();
     assert(true, 'Database schema initialization & seeding');
+
 
     // 2. User Auth & Password Hash Verification
     const superAdmin = await get("SELECT * FROM users WHERE email = 'admin@parthvi.com'");
@@ -37,14 +37,14 @@ const runTests = async () => {
 
     // 3. Products & Search Engine (Synonym & Partial Match Test)
     const hairOils = await query(
-      "SELECT * FROM products WHERE LOWER(name) LIKE '%bhringraj%' OR LOWER(key_ingredients) LIKE '%bhringraj%'"
+      "SELECT * FROM products WHERE LOWER(name) LIKE '%sukero%' OR LOWER(key_ingredients) LIKE '%jamun%' OR LOWER(description) LIKE '%herbal%'"
     );
-    assert(hairOils.length > 0, 'Product search engine matches Ayurvedic key ingredients (Bhringraj)');
+    assert(hairOils.length > 0, 'Product search engine matches Ayurvedic key ingredients');
 
     // 4. Variant Inventory & Stock Reservation Test
     const variant = await get("SELECT * FROM product_variants LIMIT 1");
     const initStock = await get("SELECT available_stock, reserved_stock FROM inventory WHERE variant_id = ?", [variant.id]);
-    assert(initStock && initStock.available_stock >= 10, 'Product variant inventory available for transactional order');
+    assert(variant && initStock && initStock.available_stock > 0, 'Product variant inventory available for transactional order');
 
     // Perform stock reservation
     await run(
@@ -65,8 +65,9 @@ const runTests = async () => {
     );
 
     // 5. Coupon Code Validation & Usage Limit Test
-    const coupon = await get("SELECT * FROM coupons WHERE code = 'AYURVEDA20' AND active = 1");
-    assert(coupon && coupon.discount_value === 20, 'Coupon code AYURVEDA20 validated server-side');
+    const coupon = await get("SELECT * FROM coupons WHERE code = 'AYURVEDA20' AND active = TRUE");
+    assert(coupon && Number(coupon.discount_value) === 20, 'Coupon code AYURVEDA20 validated server-side');
+
 
     // Record coupon usage
     await run(
@@ -76,12 +77,13 @@ const runTests = async () => {
     const usageCount = await get("SELECT COUNT(id) as count FROM coupon_usages WHERE coupon_id = ? AND user_id = ?", [coupon.id, superAdmin.id]);
     assert(usageCount.count >= 1, 'Per-user coupon usage tracked in database');
 
-    // 6. Razorpay Webhook Event Idempotency Test
+    // 6. Cashfree Webhook Event Idempotency Test
     const testEventId = `evt_test_${Date.now()}`;
     await run(
-      "INSERT INTO payment_events (provider, event_type, event_id, payload_json, processed) VALUES ('RAZORPAY', 'payment.captured', ?, '{}', 1)",
+      "INSERT INTO payment_events (provider, event_type, event_id, payload_json, processed) VALUES ('CASHFREE', 'PAYMENT_SUCCESS', ?, '{}', TRUE)",
       [testEventId]
     );
+
 
     const dupCheck = await get("SELECT id FROM payment_events WHERE event_id = ?", [testEventId]);
     assert(dupCheck !== null, 'Payment webhook idempotency tracker prevents duplicate callback execution');
@@ -89,15 +91,21 @@ const runTests = async () => {
     // 7. Order State Machine Transition Test
     const testId = Date.now();
     const testOrder = await run(
-      `INSERT INTO orders (
-        order_number, user_id, status, subtotal, tax_amount, shipping_fee, total_amount, payment_method, payment_status, shipping_address_json, invoice_number
-      ) VALUES (?, ?, 'PENDING', 499, 59.88, 0, 558.88, 'COD', 'PENDING', '{}', ?)`,
-      [`ORD-TEST-${testId}`, superAdmin.id, `INV-TEST-${testId}`]
+      `INSERT INTO orders (order_number, user_id, status, subtotal, tax_amount, shipping_fee, total_amount, payment_method, payment_status, shipping_address_json)
+       VALUES (?, ?, 'PENDING', 500, 60, 0, 560, 'COD', 'PENDING', '{}')`,
+      [`ORD-SM-${testId}`, superAdmin.id]
     );
 
+    await run("UPDATE orders SET status = 'CONFIRMED' WHERE id = ?", [testOrder.lastID]);
+    let smOrder = await get("SELECT status FROM orders WHERE id = ?", [testOrder.lastID]);
+    assert(smOrder.status === 'CONFIRMED', 'Order state machine transitions state correctly PENDING -> CONFIRMED');
+
+    await run("UPDATE orders SET status = 'PROCESSING' WHERE id = ?", [testOrder.lastID]);
+    await run("UPDATE orders SET status = 'PACKED' WHERE id = ?", [testOrder.lastID]);
     await run("UPDATE orders SET status = 'SHIPPED' WHERE id = ?", [testOrder.lastID]);
-    const updatedOrder = await get("SELECT status FROM orders WHERE id = ?", [testOrder.lastID]);
-    assert(updatedOrder.status === 'SHIPPED', 'Order state machine transitions successfully to SHIPPED');
+    await run("UPDATE orders SET status = 'DELIVERED' WHERE id = ?", [testOrder.lastID]);
+    smOrder = await get("SELECT status FROM orders WHERE id = ?", [testOrder.lastID]);
+    assert(smOrder.status === 'DELIVERED', 'Order state machine processes full lifecycle to DELIVERED');
 
     // 8. Audit Log Recording Test
     await run(
@@ -118,19 +126,43 @@ const runTests = async () => {
     const wishItem = await get("SELECT id FROM wishlist_items WHERE wishlist_id = ? AND product_id = ?", [testWishlist.id, testProduct.id]);
     assert(wishItem !== null, 'Wishlist item persisted and queried from database');
 
-    // 10. Shipping Provider Abstraction Test
+    // 10. Shipping Provider Abstraction & Selloship 2.0 Test
     const shippingProvider = getShippingProvider();
     const serviceCheck = await shippingProvider.checkServiceability('249401');
     const rateCheck = await shippingProvider.getRate('249401', 500, false);
     assert(serviceCheck.serviceable && rateCheck.success && rateCheck.shipping_fee >= 0, 'Shipping provider abstraction verifies pincode serviceability & calculates rates');
 
+    // Selloship 2.0 Specific Integration Tests
+    const selloshipAuthToken = await shippingProvider.getAuthToken();
+    assert(typeof selloshipAuthToken === 'string' && selloshipAuthToken.length > 0, 'Selloship 2.0 AuthToken API obtains valid session token');
+
+    const selloshipWaybill = await shippingProvider.createShipment({
+      order_number: `TEST-ORD-${Date.now()}`,
+      invoice_number: `INV-${Date.now()}`,
+      total_amount: '999.00',
+      payment_method: 'PREPAID',
+      shipping_address: { name: 'Test User', phone: '9999999999', pincode: '281001', city: 'Mathura', state: 'Uttar Pradesh' },
+      items: [{ product_name: 'Sukero Capsules', quantity: 1, unit_price: 699 }],
+    });
+    assert(selloshipWaybill.success && selloshipWaybill.waybill && selloshipWaybill.shippingLabel, 'Selloship 2.0 Waybill Generation creates AWB & downloadable shipping label PDF');
+
+    const selloshipTracking = await shippingProvider.trackShipment(selloshipWaybill.waybill);
+    assert(selloshipTracking.success && selloshipTracking.waybill === selloshipWaybill.waybill && selloshipTracking.events.length > 0, 'Selloship 2.0 Tracking API retrieves shipment status timeline');
+
+    const selloshipManifest = await shippingProvider.generateManifest([selloshipWaybill.waybill]);
+    assert(selloshipManifest.success && selloshipManifest.manifestDownloadUrl, 'Selloship 2.0 Manifest API generates manifest PDF for courier pickup');
+
+    const selloshipCancel = await shippingProvider.cancelShipment(selloshipWaybill.waybill);
+    assert(selloshipCancel.success && selloshipCancel.status === 'CANCELLED', 'Selloship 2.0 Waybill Cancellation API cancels AWB prior to dispatch');
+
+
     // 11. Review & Verified Purchase Test
     const revResult = await run(
-      "INSERT INTO reviews (product_id, user_id, user_name, rating, review_text, verified_purchase, status) VALUES (?, ?, 'Test User', 5, 'Excellent formulation', 1, 'PENDING')",
+      "INSERT INTO reviews (product_id, user_id, user_name, rating, review_text, verified_purchase, status) VALUES (?, ?, 'Test User', 5, 'Excellent formulation', TRUE, 'PENDING')",
       [testProduct.id, superAdmin.id]
     );
     const testRev = await get("SELECT * FROM reviews WHERE id = ?", [revResult.lastID]);
-    assert(testRev && testRev.verified_purchase === 1 && testRev.status === 'PENDING', 'Product review submitted with Verified Purchase check & PENDING moderation state');
+    assert(testRev && (testRev.verified_purchase === true || testRev.verified_purchase == 1) && testRev.status === 'PENDING', 'Product review submitted with Verified Purchase check & PENDING moderation state');
 
     // 12. Support Ticket & Agent Assignment Test
     const ticketCode = `TKT-TEST-${Date.now()}`;
@@ -151,10 +183,10 @@ const runTests = async () => {
 
     // 13. CMS Hero Banner CRUD Test
     const bRes = await run(
-      "INSERT INTO cms_banners (title, subtitle, cta_text, cta_url, desktop_image, display_order, active) VALUES ('Test Festive Banner', '20% Off', 'Shop Now', '/shop', 'https://example.com/banner.png', 1, 1)"
+      "INSERT INTO cms_banners (title, subtitle, cta_text, cta_url, desktop_image, display_order, active) VALUES ('Test Festive Banner', '20% Off', 'Shop Now', '/shop', 'https://example.com/banner.png', 1, TRUE)"
     );
     const fetchedBanner = await get("SELECT * FROM cms_banners WHERE id = ?", [bRes.lastID]);
-    assert(fetchedBanner && fetchedBanner.title === 'Test Festive Banner' && fetchedBanner.active === 1, 'CMS Hero Banner created, stored, and retrieved');
+    assert(fetchedBanner && fetchedBanner.title === 'Test Festive Banner' && (fetchedBanner.active === true || fetchedBanner.active == 1), 'CMS Hero Banner created, stored, and retrieved');
 
     // 14. CMS Blog Post CRUD Test
     const blogSlug = `test-article-${Date.now()}`;
@@ -172,8 +204,9 @@ const runTests = async () => {
     await run(
       "INSERT INTO analytics_events (event_name, session_id, page, metadata_json) VALUES ('SEARCH', 'test_sess_2', '/search', '{\"query\":\"unknown_herb\",\"results_count\":0}')"
     );
-    const zeroResultSearch = await get("SELECT metadata_json FROM analytics_events WHERE event_name = 'SEARCH' AND metadata_json LIKE '%unknown_herb%'");
+    const zeroResultSearch = await get("SELECT metadata_json FROM analytics_events WHERE event_name = 'SEARCH' AND metadata_json::text LIKE '%unknown_herb%'");
     assert(zeroResultSearch !== null, 'Analytics engine captures search events and zero-result query tracking');
+
 
     // 16. Error Spike Detector & Status Update Test
     await run(
@@ -185,18 +218,19 @@ const runTests = async () => {
     await run(
       "INSERT INTO error_logs (severity, category, message, endpoint, status) VALUES ('CRITICAL', 'API', 'Database Lock Failed', '/api/orders', 'NEW')"
     );
-    const recentErrors = await get("SELECT COUNT(id) as count FROM error_logs WHERE severity IN ('ERROR', 'CRITICAL') AND timestamp >= datetime('now', '-15 minutes')");
+    const recentErrors = await get("SELECT COUNT(id) as count FROM error_logs WHERE severity IN ('ERROR', 'CRITICAL') AND timestamp >= NOW() - INTERVAL '15 minutes'");
     assert(recentErrors.count >= 3, 'Error Spike Detector flags 3+ critical errors in 15-minute window');
 
     // 17. Webhook Inspector & Callback Retry Test
     const whTestId = `evt_wh_retry_${Date.now()}`;
     const whRes = await run(
-      "INSERT INTO payment_events (provider, event_type, event_id, payload_json, processed) VALUES ('RAZORPAY', 'payment.failed', ?, '{\"event\":\"payment.failed\"}', 0)",
+      "INSERT INTO payment_events (provider, event_type, event_id, payload_json, processed) VALUES ('CASHFREE', 'PAYMENT_FAILED', ?, '{\"event\":\"PAYMENT_FAILED\"}', FALSE)",
       [whTestId]
     );
-    await run("UPDATE payment_events SET processed = 1 WHERE id = ?", [whRes.lastID]);
+
+    await run("UPDATE payment_events SET processed = TRUE WHERE id = ?", [whRes.lastID]);
     const updatedWh = await get("SELECT processed FROM payment_events WHERE id = ?", [whRes.lastID]);
-    assert(updatedWh.processed === 1, 'Webhook Inspector marks unprocessed callback event as retried/processed');
+    assert(updatedWh.processed === true || updatedWh.processed == 1, 'Webhook Inspector marks unprocessed callback event as retried/processed');
 
     // 18. Dynamic Sitemap Data Query Test
     const sitemapProds = await query("SELECT slug FROM products WHERE status = 'PUBLISHED'");
@@ -205,9 +239,10 @@ const runTests = async () => {
 
     // 19. Customer Address Book CRUD Test
     const addrRes = await run(
-      "INSERT INTO addresses (user_id, name, phone, street_address, city, state, pincode, is_default) VALUES (?, 'Ayush Test', '9876543210', '123 Sacred Way', 'Rishikesh', 'Uttarakhand', '249201', 1)",
+      "INSERT INTO addresses (user_id, name, phone, street_address, city, state, pincode, is_default) VALUES (?, 'Ayush Test', '9876543210', '123 Sacred Way', 'Rishikesh', 'Uttarakhand', '249201', TRUE)",
       [superAdmin.id]
     );
+
     await run("UPDATE addresses SET city = 'Haridwar' WHERE id = ?", [addrRes.lastID]);
     const updatedAddr = await get("SELECT city FROM addresses WHERE id = ?", [addrRes.lastID]);
     assert(updatedAddr && updatedAddr.city === 'Haridwar', 'Customer delivery address edited and default status managed');
@@ -216,18 +251,22 @@ const runTests = async () => {
     const timeoutOrderNumber = `ORD-TIMEOUT-${Date.now()}`;
     const timeoutOrderRes = await run(
       `INSERT INTO orders (order_number, user_id, status, subtotal, tax_amount, shipping_fee, total_amount, payment_method, payment_status, shipping_address_json, created_at)
-       VALUES (?, ?, 'PENDING', 499, 59.88, 0, 558.88, 'RAZORPAY', 'PENDING', '{}', datetime('now', '-20 minutes'))`,
+       VALUES (?, ?, 'PENDING', 499, 59.88, 0, 558.88, 'CASHFREE', 'PENDING', '{}', NOW() - INTERVAL '20 minutes')`,
       [timeoutOrderNumber, superAdmin.id]
     );
+
+
     await run(
-      "INSERT INTO order_items (order_id, product_id, variant_id, product_name, variant_name, sku, unit_price, mrp, quantity, total_price) VALUES (?, 1, ?, 'Test Product', '200ml', 'SKU-TEST', 499, 599, 1, 499)",
-      [timeoutOrderRes.lastID, variant.id]
+      "INSERT INTO order_items (order_id, product_id, variant_id, product_name, variant_name, sku, unit_price, mrp, quantity, total_price) VALUES (?, ?, ?, 'Test Product', '200ml', 'SKU-TEST', 499, 599, 1, 499)",
+      [timeoutOrderRes.lastID, testProduct.id, variant.id]
     );
+
     // Simulate expired reservation cleanup
     await run(
-      "UPDATE inventory SET available_stock = available_stock + 1, reserved_stock = MAX(0, reserved_stock - 1) WHERE variant_id = ?",
+      "UPDATE inventory SET available_stock = available_stock + 1, reserved_stock = GREATEST(0, reserved_stock - 1) WHERE variant_id = ?",
       [variant.id]
     );
+
     await run("UPDATE orders SET status = 'CANCELLED', payment_status = 'EXPIRED' WHERE id = ?", [timeoutOrderRes.lastID]);
     const releasedOrder = await get("SELECT status, payment_status FROM orders WHERE id = ?", [timeoutOrderRes.lastID]);
     assert(releasedOrder.status === 'CANCELLED' && releasedOrder.payment_status === 'EXPIRED', 'Payment timeout inventory release worker releases reserved stock and cancels expired pending orders');

@@ -1,0 +1,6 @@
+curl --location --request POST 'https://selloship.com/api/lock_actvs/channels/authToken' \
+--header 'Content-Type: application/json' \
+--data-raw '{
+  "username": "XXXXXXXXX",
+  "password": "XXXXXXXXX"
+}'

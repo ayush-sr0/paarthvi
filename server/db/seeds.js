@@ -3,11 +3,36 @@ import bcrypt from 'bcryptjs';
 import { run, get, query } from './database.js';
 
 export const seedDatabase = async () => {
-  // Repair any existing product statuses
-  try {
-    await run("ALTER TABLE products ADD COLUMN IF NOT EXISTS target_dosha VARCHAR(100) DEFAULT 'TRIDOSAHIC'");
-    await run("UPDATE products SET status = 'PUBLISHED' WHERE status IS NULL OR status != 'PUBLISHED'");
-  } catch (err) {}
+  // Repair any existing product statuses & add shipping columns.
+  // Each statement runs independently so one failure doesn't block later migrations.
+  const migrations = [
+    "ALTER TABLE products ADD COLUMN IF NOT EXISTS target_dosha VARCHAR(100) DEFAULT 'TRIDOSAHIC'",
+    "ALTER TABLE orders ADD COLUMN IF NOT EXISTS waybill VARCHAR(100)",
+    "ALTER TABLE orders ADD COLUMN IF NOT EXISTS courier_name VARCHAR(100)",
+    "ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_label_url TEXT",
+    "ALTER TABLE orders ADD COLUMN IF NOT EXISTS manifest_url TEXT",
+    "ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_status VARCHAR(50)",
+    "ALTER TABLE orders ADD COLUMN IF NOT EXISTS pickup_address_id VARCHAR(50)",
+    "ALTER TABLE batches DROP CONSTRAINT IF EXISTS batches_product_id_fkey, ADD CONSTRAINT batches_product_id_fkey FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE",
+    "ALTER TABLE batches DROP CONSTRAINT IF EXISTS batches_variant_id_fkey, ADD CONSTRAINT batches_variant_id_fkey FOREIGN KEY (variant_id) REFERENCES product_variants(id) ON DELETE CASCADE",
+    "ALTER TABLE cart_items DROP CONSTRAINT IF EXISTS cart_items_variant_id_fkey, ADD CONSTRAINT cart_items_variant_id_fkey FOREIGN KEY (variant_id) REFERENCES product_variants(id) ON DELETE CASCADE",
+    "ALTER TABLE inventory_transactions DROP CONSTRAINT IF EXISTS inventory_transactions_variant_id_fkey, ADD CONSTRAINT inventory_transactions_variant_id_fkey FOREIGN KEY (variant_id) REFERENCES product_variants(id) ON DELETE CASCADE",
+    "ALTER TABLE order_items ALTER COLUMN product_id DROP NOT NULL, DROP CONSTRAINT IF EXISTS order_items_product_id_fkey, ADD CONSTRAINT order_items_product_id_fkey FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL",
+    "ALTER TABLE order_items ALTER COLUMN variant_id DROP NOT NULL, DROP CONSTRAINT IF EXISTS order_items_variant_id_fkey, ADD CONSTRAINT order_items_variant_id_fkey FOREIGN KEY (variant_id) REFERENCES product_variants(id) ON DELETE SET NULL",
+    "ALTER TABLE payments DROP CONSTRAINT IF EXISTS payments_order_id_fkey, ADD CONSTRAINT payments_order_id_fkey FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE",
+  ];
+
+
+
+
+  for (const sql of migrations) {
+    try {
+      await run(sql);
+    } catch (err) {
+      console.warn(`[seeds] Migration skipped ("${sql.slice(0, 60)}..."): ${err.message}`);
+    }
+  }
+
 
 
   console.log('Seeding Paarthvi Ayurveda authentic products...');
@@ -74,8 +99,13 @@ export const seedDatabase = async () => {
   await run('DELETE FROM inventory_transactions');
   await run('DELETE FROM inventory');
   await run('DELETE FROM batches');
+  await run('DELETE FROM order_items');
+  await run('DELETE FROM payments');
+  await run('DELETE FROM orders');
   await run('DELETE FROM product_variants');
   await run('DELETE FROM products');
+
+
 
 
   // 3. Products
@@ -346,12 +376,15 @@ export const seedDatabase = async () => {
   );
 
   console.log('✅ Database seeded with products, categories, banners, and coupons!');
-  process.exit(0);
 };
 
+
 if (process.argv[1] && process.argv[1].endsWith('seeds.js')) {
-  seedDatabase().catch(err => {
-    console.error('Failed to seed database:', err);
-    process.exit(1);
-  });
+  seedDatabase()
+    .then(() => process.exit(0))
+    .catch(err => {
+      console.error('Failed to seed database:', err);
+      process.exit(1);
+    });
 }
+

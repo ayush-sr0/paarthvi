@@ -110,7 +110,8 @@ export const PrivacyPolicyPage = () => {
             We only share necessary operational data with trusted third-party service providers who assist us in operating our e-commerce platform under strict non-disclosure obligations:
           </p>
           <ul className="list-disc pl-5 space-y-1.5 text-xs text-on-surface-variant">
-            <li><strong>Payment Gateways (Razorpay):</strong> Transactions are processed securely via PCI-DSS Compliant payment engines. We do not store credit/debit card numbers or CVVs on our servers.</li>
+            <li><strong>Payment Gateways (Cashfree Payments):</strong> Transactions are processed securely via PCI-DSS Level 1 Compliant payment engines. We do not store credit/debit card numbers or CVVs on our servers.</li>
+
             <li><strong>Logistics & Delivery Partners (Delhivery, BlueDart):</strong> Your shipping address and mobile phone number are shared exclusively to fulfill parcel delivery and send delivery SMS alerts.</li>
             <li><strong>Cloud Infrastructure (Supabase & PostgreSQL):</strong> Customer databases are encrypted at rest and in transit using SSL/TLS 256-bit encryption.</li>
           </ul>

@@ -221,7 +221,8 @@ export const CartPage = () => {
 
               <div className="flex items-center justify-center gap-2 text-[11px] text-on-surface-variant text-center font-body pt-2">
                 <ShieldCheck size={14} className="text-gold-leaf" />
-                <span>256-Bit SSL Encrypted & Razorpay Verified Payment</span>
+                <span>256-Bit SSL Encrypted & Cashfree Secured Payment</span>
+
               </div>
             </div>
           </div>

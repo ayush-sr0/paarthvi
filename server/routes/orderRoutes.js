@@ -59,6 +59,8 @@ router.get('/track/:orderNumber', async (req, res, next) => {
         status: order.status,
         created_at: order.created_at,
         total_amount: order.total_amount,
+        waybill: order.waybill,
+        courier_name: order.courier_name,
         items,
         shipment,
         shipping_address: typeof order.shipping_address_json === 'string'
@@ -67,6 +69,8 @@ router.get('/track/:orderNumber', async (req, res, next) => {
         timeline,
       },
     });
+
+
   } catch (err) {
     next(err);
   }

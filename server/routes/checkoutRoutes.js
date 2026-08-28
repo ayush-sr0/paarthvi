@@ -1,23 +1,10 @@
 import express from 'express';
-import Razorpay from 'razorpay';
 import { query, get, run } from '../db/database.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { getShippingProvider } from '../services/shippingService.js';
 
 const router = express.Router();
 
-const razorpayKeyId = process.env.RAZORPAY_KEY_ID || 'rzp_test_ParthviAyurveda2026';
-const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET || 'test_secret_key_1234567890';
-
-let razorpay = null;
-try {
-  razorpay = new Razorpay({
-    key_id: razorpayKeyId,
-    key_secret: razorpayKeySecret,
-  });
-} catch (e) {
-  console.warn('Razorpay SDK initialized with test fallback key.');
-}
 
 // Check pincode serviceability
 router.get('/pincode/:pincode', async (req, res) => {
@@ -287,37 +274,100 @@ router.post('/initiate', authenticateToken, async (req, res, next) => {
     );
 
     // 7. Payment initiation
-    if (payment_method === 'RAZORPAY') {
-      let rzpOrder = null;
-      try {
-        if (razorpay) {
-          rzpOrder = await razorpay.orders.create({
-            amount: Math.round(total_amount * 100),
-            currency: 'INR',
-            receipt: orderNumber,
-            notes: { order_id: orderId, order_number: orderNumber },
-          });
-        }
-      } catch (err) {
-        console.warn('Razorpay live API call failed, generating simulated sandbox order object:', err.message);
+    if (payment_method === 'CASHFREE') {
+      const cfAppId = process.env.CASHFREE_APP_ID;
+      const cfSecretKey = process.env.CASHFREE_SECRET_KEY;
+
+      if (!cfAppId || !cfSecretKey) {
+        return res.status(500).json({
+          success: false,
+          error: 'Cashfree configuration error: CASHFREE_APP_ID and CASHFREE_SECRET_KEY must be configured',
+        });
       }
 
-      const rzpOrderId = rzpOrder ? rzpOrder.id : `rzp_order_${orderId}_${Date.now()}`;
-      await run('UPDATE orders SET razorpay_order_id = $1 WHERE id = $2', [rzpOrderId, orderId]);
+      const cfApiVersion = process.env.CASHFREE_API_VERSION || '2023-08-01';
+      const cfEnv = process.env.CASHFREE_ENV || 'SANDBOX';
+      const cfBaseUrl = process.env.CASHFREE_BASE_URL || (cfEnv === 'PRODUCTION' ? 'https://api.cashfree.com/pg' : 'https://sandbox.cashfree.com/pg');
+      const cfReturnUrl = process.env.CASHFREE_RETURN_URL || `${process.env.BASE_URL || 'http://localhost:5001'}/api/payment/cashfree-return?order_id={order_id}&my_order_id=${orderId}`;
+      
+      const cfOrderCode = `CF_ORD_${orderId}_${Date.now()}`;
+      let cfSessionId = null;
+      let cfOrderId = cfOrderCode;
+      let cfErrorMessage = null;
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+      try {
+        const response = await fetch(`${cfBaseUrl}/orders`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-client-id': cfAppId,
+            'x-client-secret': cfSecretKey,
+            'x-api-version': cfApiVersion,
+          },
+          signal: controller.signal,
+          body: JSON.stringify({
+            order_id: cfOrderCode,
+            order_amount: Number(total_amount),
+            order_currency: 'INR',
+            customer_details: {
+              customer_id: `CUST_${userId || orderId}`,
+              customer_name: customerName || 'Valued Customer',
+              customer_email: customerEmail || 'customer@example.com',
+              customer_phone: customerPhone ? customerPhone.replace(/[^0-9]/g, '').slice(-10) : '9876543210',
+            },
+            order_meta: {
+              return_url: cfReturnUrl,
+            },
+          }),
+        });
+        clearTimeout(timeoutId);
+
+        const cfData = await response.json();
+        if (cfData && cfData.payment_session_id) {
+          cfSessionId = cfData.payment_session_id;
+          cfOrderId = cfData.cf_order_id || cfOrderCode;
+        } else {
+          cfErrorMessage = cfData?.message || 'Failed to create Cashfree payment session';
+          console.warn('Cashfree API notice:', cfErrorMessage);
+        }
+      } catch (err) {
+        clearTimeout(timeoutId);
+        cfErrorMessage = err.name === 'AbortError' ? 'Cashfree API request timed out' : err.message;
+        console.warn('Cashfree API error:', cfErrorMessage);
+      }
+
+      const allowSimulatedSession = process.env.ALLOW_SIMULATED_PAYMENTS === 'true';
+      let isSimulated = false;
+
+      if (!cfSessionId) {
+        if (allowSimulatedSession) {
+          cfSessionId = `session_simulated_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`;
+          isSimulated = true;
+        } else {
+          return res.status(400).json({
+            success: false,
+            error: cfErrorMessage || 'Payment session initiation failed',
+          });
+        }
+      }
 
       res.json({
         success: true,
         order_id: orderId,
         order_number: orderNumber,
-        razorpay_order_id: rzpOrderId,
+        payment_method: 'CASHFREE',
         amount: total_amount,
         currency: 'INR',
-        key_id: razorpayKeyId,
-        customer_name: customerName,
-        customer_email: customerEmail,
-        customer_phone: customerPhone,
+        payment_session_id: cfSessionId,
+        cf_order_id: cfOrderId,
+        environment: cfEnv.toLowerCase(),
+        is_simulated: isSimulated,
       });
     } else {
+
       // COD Order direct confirmation
       await run("UPDATE orders SET status = 'CONFIRMED' WHERE id = $1", [orderId]);
       res.json({
@@ -329,6 +379,7 @@ router.post('/initiate', authenticateToken, async (req, res, next) => {
         status: 'CONFIRMED',
       });
     }
+
   } catch (err) {
     next(err);
   }
@@ -342,9 +393,10 @@ router.post('/release-expired-reservations', async (req, res, next) => {
        FROM orders o
        JOIN order_items oi ON o.id = oi.order_id
        WHERE o.status = 'PENDING'
-       AND o.payment_method = 'RAZORPAY'
+       AND o.payment_method IN ('CASHFREE', 'ONLINE')
        AND o.created_at <= NOW() - INTERVAL '15 minutes'`
     );
+
 
     const releasedOrders = new Set();
 

@@ -18,8 +18,10 @@ import reviewRoutes from './routes/reviewRoutes.js';
 import supportRoutes from './routes/supportRoutes.js';
 import cmsRoutes from './routes/cmsRoutes.js';
 import seoRoutes from './routes/seoRoutes.js';
+import shippingRoutes from './routes/shippingRoutes.js';
 
 import { errorHandler } from './middleware/errorLogger.js';
+
 
 import { authenticateToken } from './middleware/auth.js';
 
@@ -31,7 +33,13 @@ const PORT = process.env.PORT || 5000;
 
 // Middlewares
 app.use(cors());
-app.use(express.json({ limit: '50mb' }));
+app.use(express.json({
+  limit: '50mb',
+  verify: (req, res, buf) => {
+    req.rawBody = buf ? buf.toString('utf8') : '';
+  },
+}));
+
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use('/products', express.static(path.join(__dirname, '../public/products')));
 app.use(authenticateToken);
@@ -62,6 +70,8 @@ app.use('/api/wishlist', wishlistRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/cms', cmsRoutes);
+app.use('/api/shipping', shippingRoutes);
+
 
 // Static assets (if serving built frontend in production)
 const distPath = path.join(__dirname, '../dist');
@@ -82,10 +92,9 @@ app.get('*', (req, res, next) => {
 // Global Error Handler
 app.use(errorHandler);
 
-// Start server (DB is Supabase — no local init needed)
 const startServer = async () => {
   try {
-    app.listen(PORT, () => {
+    const server = app.listen(PORT, () => {
       console.log(`====================================================`);
       console.log(`  Parthvi Ayurveda E-Commerce Server Running`);
       console.log(`  DB: Supabase PostgreSQL`);
@@ -93,10 +102,20 @@ const startServer = async () => {
       console.log(`  Health: http://localhost:${PORT}/api/health`);
       console.log(`====================================================`);
     });
+
+    server.on('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        console.error(`Port ${PORT} is already in use. Please terminate the process using port ${PORT} or specify a different PORT.`);
+      } else {
+        console.error('Server error:', err);
+      }
+      process.exit(1);
+    });
   } catch (err) {
     console.error('Failed to start server:', err);
     process.exit(1);
   }
 };
+
 
 startServer();

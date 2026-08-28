@@ -125,16 +125,17 @@ class MockShippingProvider extends ShippingProvider {
   }
 }
 
+import SelloshipShippingProvider from './selloshipService.js';
+
 // Factory: returns the active shipping provider
 let _provider = null;
 
 export const getShippingProvider = () => {
   if (!_provider) {
-    // Switch to live provider here when ready:
-    // _provider = new DelhiveryProvider(process.env.DELHIVERY_API_KEY);
-    _provider = new MockShippingProvider();
+    _provider = new SelloshipShippingProvider();
   }
   return _provider;
 };
 
-export { ShippingProvider, MockShippingProvider };
+export { ShippingProvider, MockShippingProvider, SelloshipShippingProvider };
+

@@ -433,7 +433,28 @@ export const AccountPage = () => {
             <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
               <div className="bg-surface rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl relative border border-gold-leaf">
                 <button onClick={() => setSelectedOrderTracking(null)} className="absolute top-4 right-4 text-lg font-bold"><X size={20} /></button>
-                <h3 className="font-display text-lg font-bold text-primary">Tracking Order {selectedOrderTracking.order_number}</h3>
+                <div>
+                  <h3 className="font-display text-lg font-bold text-primary">Tracking Order {selectedOrderTracking.order_number}</h3>
+                  {selectedOrderTracking.waybill && (
+                    <div className="mt-2 p-2.5 bg-emerald-500/10 border border-emerald-500/30 rounded-lg flex items-center justify-between font-body text-xs">
+                      <div>
+                        <span className="font-bold text-emerald-800">AWB Tracking: {selectedOrderTracking.waybill}</span>
+                        <p className="text-[11px] text-emerald-700">Courier: {selectedOrderTracking.courier_name || 'Selloship Partner'}</p>
+                      </div>
+                      {selectedOrderTracking.shipping_label_url && (
+                        <a
+                          href={selectedOrderTracking.shipping_label_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="bg-primary text-on-primary text-[10px] font-bold font-label px-2.5 py-1 rounded hover:bg-primary-hover"
+                        >
+                          View Label PDF
+                        </a>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 <div className="space-y-4 py-2">
                   {selectedOrderTracking.timeline?.map((step, idx) => (
                     <div key={idx} className="flex items-start gap-3 text-xs font-body">
@@ -450,6 +471,7 @@ export const AccountPage = () => {
               </div>
             </div>
           )}
+
 
           {/* Return Request Modal */}
           {returnModal && (

@@ -151,13 +151,19 @@ export const api = {
   },
 
   async verifyPayment(paymentPayload) {
-    const res = await fetch(`${API_BASE}/payment/verify`, {
+    return this.verifyCashfreePayment(paymentPayload);
+  },
+
+  async verifyCashfreePayment(paymentPayload) {
+    const res = await fetch(`${API_BASE}/payment/verify-cashfree`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(paymentPayload),
     });
     return res.json();
   },
+
+
 
   // Orders
   async getMyOrders() {
@@ -240,12 +246,17 @@ export const api = {
   },
 
   async deleteProduct(productId) {
-    const res = await fetch(`${API_BASE}/admin/products/${productId}`, {
-      method: 'DELETE',
-      headers: getAuthHeaders(),
-    });
-    return res.json();
+    try {
+      const res = await fetch(`${API_BASE}/admin/products/${productId}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
+      return res.json();
+    } catch (err) {
+      return { success: false, error: 'Network error — please check your connection and try again.' };
+    }
   },
+
 
   async getProductImages(productId) {
     const res = await fetch(`${API_BASE}/admin/products/${productId}/images`, { headers: getAuthHeaders() });
@@ -558,4 +569,37 @@ export const api = {
     });
     return res.json();
   },
+
+  // Selloship 2.0 Shipping APIs
+  async createSelloshipWaybill(orderId, courierName = 'Delhivery') {
+    const res = await fetch(`${API_BASE}/shipping/create-waybill/${orderId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify({ courierName }),
+    });
+    return res.json();
+  },
+
+  async trackSelloshipPackage(waybill) {
+    const res = await fetch(`${API_BASE}/shipping/track/${waybill}`);
+    return res.json();
+  },
+
+  async cancelSelloshipWaybill(orderId) {
+    const res = await fetch(`${API_BASE}/shipping/cancel-waybill/${orderId}`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+    });
+    return res.json();
+  },
+
+  async generateSelloshipManifest(awbNumbers) {
+    const res = await fetch(`${API_BASE}/shipping/manifest`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify({ awbNumbers }),
+    });
+    return res.json();
+  },
 };
+
