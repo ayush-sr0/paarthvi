@@ -31,6 +31,7 @@ export const ShopPage = () => {
   }, []);
 
   useEffect(() => {
+    let isCurrent = true;
     setLoading(true);
     const params = {};
     if (selectedCategory) params.category = selectedCategory;
@@ -41,6 +42,7 @@ export const ShopPage = () => {
     if (minRating) params.rating = minRating;
 
     api.getProducts(params).then(data => {
+      if (!isCurrent) return;
       if (data.success) {
         let items = data.products || [];
         if (inStockOnly) {
@@ -49,17 +51,25 @@ export const ShopPage = () => {
         setProducts(items);
       }
       setLoading(false);
+      window.scrollTo(0, 0);
     });
 
     api.trackEvent('PAGE_VIEW', '/shop', { category: selectedCategory, search: searchQuery });
+
+    return () => {
+      isCurrent = false;
+    };
   }, [selectedCategory, selectedSort, searchQuery, minPrice, priceRange, minRating, inStockOnly]);
 
+
   const handleCategorySelect = (slug) => {
+    window.scrollTo(0, 0);
     const newParams = new URLSearchParams(searchParams);
     if (slug) newParams.set('category', slug);
     else newParams.delete('category');
     setSearchParams(newParams);
   };
+
 
   const handleSortChange = (sortVal) => {
     const newParams = new URLSearchParams(searchParams);
@@ -254,9 +264,9 @@ export const ShopPage = () => {
                           Best Seller
                         </span>
                       )}
-                      {product.mrp > product.selling_price && (
+                      {Number(product.mrp) > Number(product.selling_price) && (
                         <span className="bg-primary text-on-primary font-label text-[10px] font-bold uppercase px-2 py-0.5 rounded shadow-sm">
-                          {Math.round(((product.mrp - product.selling_price) / product.mrp) * 100)}% OFF
+                          {Math.round(((Number(product.mrp) - Number(product.selling_price)) / Number(product.mrp)) * 100)}% OFF
                         </span>
                       )}
                     </div>
@@ -306,10 +316,11 @@ export const ShopPage = () => {
                     <div className="pt-3 border-t border-outline/10 flex items-center justify-between gap-2">
                       <div>
                         <span className="font-label text-base font-bold text-primary">₹{product.selling_price}</span>
-                        {product.mrp > product.selling_price && (
+                        {Number(product.mrp) > Number(product.selling_price) && (
                           <span className="text-xs text-on-surface-variant line-through ml-1.5">₹{product.mrp}</span>
                         )}
                       </div>
+
 
                       <Link
                         to={`/product/${product.slug}`}

@@ -204,9 +204,11 @@ router.post('/products', requireRole(['PRODUCT_MANAGER']), async (req, res, next
 // Update Product
 router.put('/products/:id', requireRole(['PRODUCT_MANAGER']), async (req, res, next) => {
   try {
-    const productId = req.params.id;
+    const productId = parseInt(req.params.id, 10);
+    if (isNaN(productId)) return res.status(400).json({ success: false, error: 'Invalid product ID' });
     const prev = await get('SELECT * FROM products WHERE id = $1', [productId]);
     if (!prev) return res.status(404).json({ success: false, error: 'Product not found' });
+
 
     const {
       name, slug, category_id, brand, short_desc, description, mrp, selling_price,
@@ -214,6 +216,9 @@ router.put('/products/:id', requireRole(['PRODUCT_MANAGER']), async (req, res, n
       ingredients, key_ingredients, benefits, usage_directions,
       warnings, storage_info, net_qty, manufacturer_info,
     } = req.body;
+
+    const parsedMrp = (mrp !== undefined && mrp !== null && mrp !== '') ? Number(mrp) : null;
+    const parsedSellingPrice = (selling_price !== undefined && selling_price !== null && selling_price !== '') ? Number(selling_price) : null;
 
     await run(
       `UPDATE products SET
@@ -229,7 +234,7 @@ router.put('/products/:id', requireRole(['PRODUCT_MANAGER']), async (req, res, n
         updated_at = NOW()
        WHERE id = $22`,
       [
-        name, slug, category_id, brand, short_desc, description, mrp, selling_price,
+        name, slug, category_id, brand, short_desc, description, parsedMrp, parsedSellingPrice,
         is_featured != null ? Boolean(is_featured) : null,
         is_bestseller != null ? Boolean(is_bestseller) : null,
         is_new != null ? Boolean(is_new) : null,
@@ -239,9 +244,20 @@ router.put('/products/:id', requireRole(['PRODUCT_MANAGER']), async (req, res, n
       ]
     );
 
+    if (parsedMrp !== null || parsedSellingPrice !== null) {
+      await run(
+        `UPDATE product_variants
+         SET mrp = COALESCE($1, mrp), selling_price = COALESCE($2, selling_price)
+         WHERE product_id = $3`,
+        [parsedMrp, parsedSellingPrice, productId]
+      );
+    }
+
+
     await logAuditAction(req, 'UPDATE_PRODUCT', 'PRODUCT', productId, prev, req.body);
     res.json({ success: true, message: 'Product updated successfully' });
   } catch (err) {
+
     next(err);
   }
 });

@@ -448,9 +448,9 @@ export const HomePage = () => {
                       Best Seller
                     </span>
                   )}
-                  {product.mrp > product.selling_price && (
+                  {Number(product.mrp) > Number(product.selling_price) && (
                     <span className="bg-primary text-on-primary font-label text-[10px] font-bold uppercase px-2 py-0.5 rounded shadow-sm">
-                      {Math.round(((product.mrp - product.selling_price) / product.mrp) * 100)}% OFF
+                      {Math.round(((Number(product.mrp) - Number(product.selling_price)) / Number(product.mrp)) * 100)}% OFF
                     </span>
                   )}
                 </div>
@@ -495,10 +495,11 @@ export const HomePage = () => {
                 <div className="pt-3 border-t border-outline/10 flex items-center justify-between gap-2">
                   <div>
                     <span className="font-label text-base font-bold text-primary">₹{product.selling_price}</span>
-                    {product.mrp > product.selling_price && (
+                    {Number(product.mrp) > Number(product.selling_price) && (
                       <span className="text-xs text-on-surface-variant line-through ml-1.5">₹{product.mrp}</span>
                     )}
                   </div>
+
 
                   <Link
                     to={`/product/${product.slug}`}
@@ -656,8 +657,9 @@ export const HomePage = () => {
 
       {/* Video Modal Overlay */}
       {isVideoModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-surface rounded-2xl max-w-3xl w-full p-6 relative border border-gold-leaf shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-start justify-center p-4 overflow-y-auto py-8 md:py-12">
+          <div className="bg-surface rounded-2xl max-w-3xl w-full p-6 relative border border-gold-leaf shadow-2xl my-auto">
+
             <button
               onClick={() => setIsVideoModalOpen(false)}
               className="absolute top-4 right-4 text-on-surface font-bold text-lg"

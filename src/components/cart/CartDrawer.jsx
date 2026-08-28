@@ -108,8 +108,11 @@ export const CartDrawer = () => {
                     </span>
                     <div className="flex items-center gap-2">
                       <span className="font-label text-xs font-bold text-primary">₹{item.unit_price}</span>
-                      <span className="text-[11px] text-on-surface-variant line-through">₹{item.mrp}</span>
+                      {Number(item.mrp) > Number(item.unit_price) && (
+                        <span className="text-[11px] text-on-surface-variant line-through">₹{item.mrp}</span>
+                      )}
                     </div>
+
                   </div>
 
                   {/* Quantity Controls */}

@@ -130,8 +130,10 @@ export const AccountPage = () => {
   const [returnImageUrl, setReturnImageUrl] = useState('');
 
   useEffect(() => {
+    window.scrollTo(0, 0);
     if (user) {
       if (activeTab === 'orders') {
+
         setLoadingOrders(true);
         api.getMyOrders().then(data => {
           if (data.success) setOrders(data.orders || []);
@@ -255,11 +257,11 @@ export const AccountPage = () => {
     }
   };
 
-  // Login/Register Screen
   if (!user) {
     return (
-      <div className="max-w-md mx-auto px-margin-mobile py-16">
+      <div className="max-w-md mx-auto px-margin-mobile pt-10 pb-16 md:pt-14">
         <div className="bg-surface rounded-2xl border border-gold-leaf/30 p-8 shadow-xl space-y-6">
+
           <div className="text-center space-y-1">
             <span className="material-symbols-outlined text-3xl text-gold-leaf">spa</span>
             <h2 className="font-display text-2xl font-bold text-primary">
@@ -430,8 +432,8 @@ export const AccountPage = () => {
 
           {/* Tracking Timeline Modal */}
           {selectedOrderTracking && (
-            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-              <div className="bg-surface rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl relative border border-gold-leaf">
+            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-start justify-center p-4 overflow-y-auto py-8 md:py-12">
+              <div className="bg-surface rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl relative border border-gold-leaf my-auto">
                 <button onClick={() => setSelectedOrderTracking(null)} className="absolute top-4 right-4 text-lg font-bold"><X size={20} /></button>
                 <div>
                   <h3 className="font-display text-lg font-bold text-primary">Tracking Order {selectedOrderTracking.order_number}</h3>
@@ -475,8 +477,8 @@ export const AccountPage = () => {
 
           {/* Return Request Modal */}
           {returnModal && (
-            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-              <div className="bg-surface rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl relative border border-gold-leaf">
+            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-start justify-center p-4 overflow-y-auto py-8 md:py-12">
+              <div className="bg-surface rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl relative border border-gold-leaf my-auto">
                 <button onClick={() => setReturnModal(null)} className="absolute top-4 right-4"><X size={20} /></button>
                 <h3 className="font-display text-lg font-bold text-primary">Request Return</h3>
                 <div className="space-y-3 font-body text-xs">
@@ -505,6 +507,7 @@ export const AccountPage = () => {
                     <label className="block font-semibold mb-1">Supporting Image URL (optional)</label>
                     <input type="url" value={returnImageUrl} onChange={e => setReturnImageUrl(e.target.value)} placeholder="https://..." className="w-full px-3 py-2.5 bg-surface-container border border-outline/30 rounded-lg outline-none focus:border-gold-leaf" />
                   </div>
+
                   <button onClick={handleSubmitReturn} disabled={!returnItemId || !returnReason} className="w-full bg-primary text-on-primary font-label text-xs font-bold uppercase py-3 rounded-full hover:bg-primary-container transition-colors disabled:opacity-50">
                     Submit Return Request
                   </button>
@@ -542,7 +545,8 @@ export const AccountPage = () => {
                     <h4 className="font-display text-sm font-bold text-primary cursor-pointer hover:text-gold-leaf" onClick={() => navigate(`/product/${item.slug}`)}>{item.name}</h4>
                     <div className="flex items-baseline gap-2">
                       <span className="font-display text-lg font-bold text-primary">₹{item.selling_price}</span>
-                      {item.mrp > item.selling_price && <span className="text-xs text-on-surface-variant line-through">₹{item.mrp}</span>}
+                      {Number(item.mrp) > Number(item.selling_price) && <span className="text-xs text-on-surface-variant line-through">₹{item.mrp}</span>}
+
                     </div>
                     <div className="flex gap-2 pt-1">
                       <button onClick={() => handleMoveToCart(item.product_id)} disabled={item.total_stock <= 0} className="flex-1 bg-primary text-on-primary font-label text-[10px] font-bold uppercase py-2 rounded-full hover:bg-primary-container transition-colors disabled:opacity-50 inline-flex items-center justify-center gap-1">
@@ -685,8 +689,8 @@ export const AccountPage = () => {
 
           {/* New Ticket Modal */}
           {showNewTicket && (
-            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-              <div className="bg-surface rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl relative border border-gold-leaf">
+            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+              <div className="bg-surface rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl relative border border-gold-leaf my-auto">
                 <button onClick={() => setShowNewTicket(false)} className="absolute top-4 right-4"><X size={20} /></button>
                 <h3 className="font-display text-lg font-bold text-primary">Create Support Ticket</h3>
                 <form onSubmit={handleCreateTicket} className="space-y-3 font-body text-xs">
@@ -721,8 +725,9 @@ export const AccountPage = () => {
 
           {/* Ticket Detail Modal */}
           {selectedTicket && (
-            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-              <div className="bg-surface rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl relative border border-gold-leaf max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+              <div className="bg-surface rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl relative border border-gold-leaf max-h-[80vh] overflow-hidden flex flex-col my-auto">
+
                 <button onClick={() => { setSelectedTicket(null); setTicketMessages([]); }} className="absolute top-4 right-4"><X size={20} /></button>
                 <div>
                   <span className="font-label text-[10px] uppercase text-gold-leaf font-bold">{selectedTicket.ticket_code} · {selectedTicket.status}</span>

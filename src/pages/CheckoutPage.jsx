@@ -350,7 +350,8 @@ export const CheckoutPage = () => {
   }
 
   return (
-    <div className="max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop py-8 space-y-8">
+    <div className="max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop pt-8 pb-16 md:pt-12 md:pb-24 space-y-8">
+
       
       {/* Checkout Title */}
       <div className="border-b border-outline/10 pb-4 flex items-center justify-between">
@@ -603,8 +604,9 @@ export const CheckoutPage = () => {
 
       {/* Cashfree Sandbox Payment Simulation Modal (DEV builds only) */}
       {import.meta.env.DEV && cashfreeModal.open && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-surface rounded-2xl border border-gold-leaf/40 shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-surface rounded-2xl border border-gold-leaf/40 shadow-2xl max-w-md w-full overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-200">
+
             {/* Modal Header */}
             <div className="bg-primary text-on-primary p-4 flex items-center justify-between">
               <div className="flex items-center gap-2">

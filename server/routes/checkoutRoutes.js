@@ -131,13 +131,17 @@ router.post('/initiate', authenticateToken, async (req, res, next) => {
 
     for (const item of items) {
       const variant = await get(
-        `SELECT v.*, p.name as product_name, p.id as product_id, i.available_stock
+        `SELECT v.id, v.product_id, v.sku, v.attribute_name, v.attribute_value,
+                COALESCE(v.mrp, p.mrp) as mrp,
+                COALESCE(v.selling_price, p.selling_price) as selling_price,
+                p.name as product_name, p.id as product_id, i.available_stock
          FROM product_variants v
          JOIN products p ON v.product_id = p.id
          LEFT JOIN inventory i ON v.id = i.variant_id
-         WHERE v.id = $1 AND p.status = 'PUBLISHED'`,
+         WHERE v.id = $1 AND (p.status = 'PUBLISHED' OR p.status IS NULL)`,
         [item.variant_id]
       );
+
 
       if (!variant) {
         return res.status(400).json({ success: false, error: `Product variant not found` });

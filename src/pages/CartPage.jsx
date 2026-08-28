@@ -98,10 +98,11 @@ export const CartPage = () => {
                       </span>
                       <div className="flex items-center gap-2">
                         <span className="font-label text-sm font-bold text-primary">₹{item.unit_price}</span>
-                        {item.mrp > item.unit_price && (
+                        {Number(item.mrp) > Number(item.unit_price) && (
                           <span className="text-xs text-on-surface-variant line-through">₹{item.mrp}</span>
                         )}
                       </div>
+
                     </div>
                   </div>
 

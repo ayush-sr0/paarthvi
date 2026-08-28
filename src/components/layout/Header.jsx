@@ -3,7 +3,9 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
 import { api } from '../../services/api';
+import { Logo } from '../Logo';
 import { ShoppingBag, Heart, User, Search, Menu, X, Shield, Home, Sparkles, BookOpen } from 'lucide-react';
+
 
 export const Header = () => {
   const { user } = useAuth();
@@ -61,14 +63,9 @@ export const Header = () => {
             {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
           </button>
 
-          {/* Logo & Brand Emblem */}
-          <Link to="/" className="flex items-center group">
-            <img
-              src="/logo.svg"
-              alt="Paarthvi Ayurveda"
-              className="h-12 md:h-16 w-auto object-contain transition-transform duration-300 group-hover:scale-105"
-            />
-          </Link>
+          {/* Logo & Brand Emblem on upper left corner */}
+          <Logo size="md" />
+
 
           {/* Desktop Navigation Links */}
           <nav className="hidden lg:flex items-center gap-8 font-label text-xs uppercase tracking-wider font-semibold text-on-surface-variant">

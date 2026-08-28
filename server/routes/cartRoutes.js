@@ -28,15 +28,19 @@ router.post('/sync', async (req, res, next) => {
 
     for (const item of items) {
       const variant = await get(
-        `SELECT v.*, p.name as product_name, p.slug as product_slug, p.id as product_id,
+        `SELECT v.id, v.product_id, v.sku, v.attribute_name, v.attribute_value,
+                COALESCE(v.mrp, p.mrp) as mrp,
+                COALESCE(v.selling_price, p.selling_price) as selling_price,
+                p.name as product_name, p.slug as product_slug,
                 (SELECT image_url FROM product_images WHERE product_id = p.id LIMIT 1) as main_image,
                 i.available_stock
          FROM product_variants v
          JOIN products p ON v.product_id = p.id
          LEFT JOIN inventory i ON v.id = i.variant_id
-         WHERE v.id = $1 AND p.status = 'PUBLISHED'`,
+         WHERE v.id = $1 AND (p.status = 'PUBLISHED' OR p.status IS NULL)`,
         [item.variant_id]
       );
+
 
       if (variant) {
         const qty = Math.min(Math.max(1, item.quantity), variant.available_stock || 10);

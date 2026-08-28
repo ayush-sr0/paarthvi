@@ -137,6 +137,7 @@ export const AdminDashboardPage = () => {
   }, []);
 
   useEffect(() => {
+    window.scrollTo(0, 0);
     if (!user || user.role === 'CUSTOMER') return;
 
     if (activeTab === 'overview') {
@@ -144,8 +145,10 @@ export const AdminDashboardPage = () => {
       api.getAdminOverview().then(data => {
         if (data.success) setOverview(data);
         setLoadingOverview(false);
+        window.scrollTo(0, 0);
       });
     } else if (activeTab === 'orders') {
+
       api.getAdminOrders(orderStatusFilter).then(data => {
         if (data.success) setAdminOrders(data.orders || []);
       });
@@ -776,8 +779,8 @@ export const AdminDashboardPage = () => {
 
           {/* Tracking Modal */}
           {trackingModalData.open && (
-            <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-              <div className="bg-surface rounded-2xl w-full max-w-lg p-6 space-y-4 shadow-2xl border border-gold-leaf/40 relative">
+            <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-start justify-center p-4 overflow-y-auto py-8 md:py-12">
+              <div className="bg-surface rounded-2xl w-full max-w-lg p-6 space-y-4 shadow-2xl border border-gold-leaf/40 relative my-auto">
                 <button onClick={() => setTrackingModalData({ open: false, waybill: '', tracking: null })} className="absolute top-4 right-4 text-on-surface-variant hover:text-primary"><X size={20} /></button>
                 <h3 className="font-display text-lg font-bold text-primary flex items-center gap-2"><Truck className="text-gold-leaf" size={20} /> Live Selloship Tracking</h3>
                 
@@ -809,8 +812,8 @@ export const AdminDashboardPage = () => {
 
           {/* Manifest Modal */}
           {manifestModalData.open && (
-            <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-              <div className="bg-surface rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl border border-gold-leaf/40 relative text-center">
+            <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-start justify-center p-4 overflow-y-auto py-8 md:py-12">
+              <div className="bg-surface rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl border border-gold-leaf/40 relative text-center my-auto">
                 <button onClick={() => setManifestModalData({ open: false, manifestNumber: null, downloadUrl: null })} className="absolute top-4 right-4 text-on-surface-variant hover:text-primary"><X size={20} /></button>
                 <Printer className="mx-auto text-gold-leaf" size={36} />
                 <h3 className="font-display text-lg font-bold text-primary">Manifest Generated</h3>
@@ -828,6 +831,7 @@ export const AdminDashboardPage = () => {
               </div>
             </div>
           )}
+
         </div>
       )}
 
@@ -847,10 +851,11 @@ export const AdminDashboardPage = () => {
 
           {/* Add Product Modal */}
           {showAddProductModal && (
-            <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-              <div className="bg-surface rounded-2xl w-full max-w-2xl p-6 space-y-5 shadow-2xl border border-gold-leaf relative my-4">
+            <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-start justify-center p-4 overflow-y-auto py-8 md:py-12">
+              <div className="bg-surface rounded-2xl w-full max-w-2xl p-6 space-y-5 shadow-2xl border border-gold-leaf relative my-auto">
                 <button onClick={() => setShowAddProductModal(false)} className="absolute top-4 right-4 text-on-surface-variant hover:text-primary"><X size={20} /></button>
                 <h3 className="font-display text-lg font-bold text-primary flex items-center gap-2"><Plus size={18} /> Add New Formulation / Product</h3>
+
 
                 <form onSubmit={handleCreateProduct} className="space-y-4 font-body text-xs">
                   {/* Basic Info */}
@@ -1099,10 +1104,11 @@ export const AdminDashboardPage = () => {
 
           {/* Edit Product Modal */}
           {showEditProductModal && editProd && (
-            <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-              <div className="bg-surface rounded-2xl w-full max-w-2xl p-6 space-y-5 shadow-2xl border border-gold-leaf relative my-4">
+            <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-start justify-center p-4 overflow-y-auto py-8 md:py-12">
+              <div className="bg-surface rounded-2xl w-full max-w-2xl p-6 space-y-5 shadow-2xl border border-gold-leaf relative my-auto">
                 <button onClick={() => setShowEditProductModal(false)} className="absolute top-4 right-4"><X size={20} /></button>
                 <h3 className="font-display text-lg font-bold text-primary flex items-center gap-2"><Edit size={18} /> Edit Product & Gallery Images</h3>
+
 
                 <form onSubmit={handleUpdateProduct} className="space-y-4 font-body text-xs">
                   {/* Basic Info */}
@@ -1280,7 +1286,8 @@ export const AdminDashboardPage = () => {
                 <div className="flex items-center gap-3 shrink-0">
                   <div className="text-right">
                     <span className="font-label font-bold text-primary text-sm block">₹{p.selling_price}</span>
-                    {p.mrp > p.selling_price && <span className="text-on-surface-variant line-through text-[11px]">₹{p.mrp}</span>}
+                    {Number(p.mrp) > Number(p.selling_price) && <span className="text-on-surface-variant line-through text-[11px]">₹{p.mrp}</span>}
+
                   </div>
                   <button
                     onClick={() => handleEditProduct(p)}
@@ -1350,10 +1357,11 @@ export const AdminDashboardPage = () => {
 
           {/* Banner Modal */}
           {showBannerModal && (
-            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-              <div className="bg-surface rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl relative border border-gold-leaf">
+            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-start justify-center p-4 overflow-y-auto py-8 md:py-12">
+              <div className="bg-surface rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl relative border border-gold-leaf my-auto">
                 <button onClick={() => setShowBannerModal(false)} className="absolute top-4 right-4"><X size={20} /></button>
                 <h3 className="font-display text-lg font-bold text-primary">{bannerForm.id ? 'Edit Hero Banner' : 'Create Hero Banner'}</h3>
+
                 <form onSubmit={handleSaveBanner} className="space-y-3 font-body text-xs">
                   <div>
                     <label className="block font-semibold mb-1">Banner Title</label>
@@ -1452,10 +1460,11 @@ export const AdminDashboardPage = () => {
 
           {/* Blog Modal */}
           {showBlogModal && (
-            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-              <div className="bg-surface rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl relative border border-gold-leaf max-h-[85vh] overflow-y-auto">
+            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-start justify-center p-4 overflow-y-auto py-8 md:py-12">
+              <div className="bg-surface rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl relative border border-gold-leaf max-h-[85vh] overflow-y-auto my-auto">
                 <button onClick={() => setShowBlogModal(false)} className="absolute top-4 right-4"><X size={20} /></button>
                 <h3 className="font-display text-lg font-bold text-primary">{blogForm.id ? 'Edit Blog Article' : 'Publish New Article'}</h3>
+
                 <form onSubmit={handleSaveBlogPost} className="space-y-3 font-body text-xs">
                   <div>
                     <label className="block font-semibold mb-1">Article Title</label>
@@ -2001,9 +2010,10 @@ export const AdminDashboardPage = () => {
 
           {/* Raw Webhook Payload Modal */}
           {selectedRawWebhook && (
-            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-              <div className="bg-surface rounded-2xl max-w-xl w-full p-6 space-y-4 shadow-2xl relative border border-gold-leaf max-h-[80vh] overflow-y-auto">
+            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-start justify-center p-4 overflow-y-auto py-8 md:py-12">
+              <div className="bg-surface rounded-2xl max-w-xl w-full p-6 space-y-4 shadow-2xl relative border border-gold-leaf max-h-[80vh] overflow-y-auto my-auto">
                 <button onClick={() => setSelectedRawWebhook(null)} className="absolute top-4 right-4"><X size={20} /></button>
+
                 <div>
                   <span className="font-label text-[10px] uppercase text-gold-leaf font-bold">{selectedRawWebhook.provider} · Event #{selectedRawWebhook.id}</span>
                   <h3 className="font-display text-lg font-bold text-primary">{selectedRawWebhook.event_type}</h3>

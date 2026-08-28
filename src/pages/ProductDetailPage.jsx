@@ -26,8 +26,11 @@ export const ProductDetailPage = () => {
   const [reviewMessage, setReviewMessage] = useState(null);
 
   useEffect(() => {
+    let isCurrent = true;
     setLoading(true);
+
     api.getProductBySlug(slug).then(data => {
+      if (!isCurrent) return;
       if (data.success && data.product) {
         setProduct(data.product);
         const defaultVar = data.product.variants && data.product.variants[0] ? data.product.variants[0] : null;
@@ -36,10 +39,17 @@ export const ProductDetailPage = () => {
         setSelectedImage(mainImg);
       }
       setLoading(false);
+      window.scrollTo(0, 0);
     });
 
     api.trackEvent('PRODUCT_VIEW', `/product/${slug}`, { slug });
+
+    return () => {
+      isCurrent = false;
+    };
   }, [slug]);
+
+
 
   if (loading) {
     return (
@@ -181,11 +191,12 @@ export const ProductDetailPage = () => {
           {/* Price Block */}
           <div className="flex items-baseline gap-3">
             <span className="font-display text-3xl font-bold text-primary">₹{currentPrice}</span>
-            {currentMrp > currentPrice && (
+            {Number(currentMrp) > Number(currentPrice) && (
               <span className="font-body text-base text-on-surface-variant line-through">₹{currentMrp}</span>
             )}
             <span className="text-xs font-label uppercase text-gold-leaf font-bold">Inclusive of all taxes</span>
           </div>
+
 
           {/* Variant Selector */}
           {product.variants && product.variants.length > 0 && (

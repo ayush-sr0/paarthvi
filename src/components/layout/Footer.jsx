@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Logo } from '../Logo';
 import { ShieldCheck, Lock, Truck, RefreshCw, Mail, Phone, MapPin, CheckCircle } from 'lucide-react';
+
 
 export const Footer = () => {
   const [newsletterEmail, setNewsletterEmail] = useState('');
@@ -57,13 +59,10 @@ export const Footer = () => {
           
           {/* Brand Philosophy Column */}
           <div className="space-y-4">
-            <Link to="/" className="inline-block mb-1">
-              <img
-                src="/logo.svg"
-                alt="Paarthvi Ayurveda"
-                className="h-16 w-auto object-contain bg-white/90 p-1.5 rounded-xl shadow-sm"
-              />
-            </Link>
+            <div className="mb-2">
+              <Logo size="md" />
+            </div>
+
             <p className="text-xs leading-relaxed opacity-80 font-body">
               Restoring constitutional balance through time-honored Ayurvedic formulations, ethically sourced Himalayan herbs, and traditional Kshirpak Vidhi processing.
             </p>
@@ -140,8 +139,9 @@ export const Footer = () => {
 
       {/* Policy Modal Overlay */}
       {activeModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-surface text-on-surface rounded-xl max-w-2xl w-full p-6 max-h-[80vh] overflow-y-auto shadow-2xl relative border border-gold-leaf">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-start justify-center p-4 overflow-y-auto py-8 md:py-12">
+          <div className="bg-surface text-on-surface rounded-xl max-w-2xl w-full p-6 max-h-[80vh] overflow-y-auto shadow-2xl relative border border-gold-leaf my-auto">
+
             <button onClick={() => setActiveModal(null)} className="absolute top-4 right-4 font-bold text-lg">✕</button>
             
             {activeModal === 'privacy' && (

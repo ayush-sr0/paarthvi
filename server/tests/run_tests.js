@@ -2,7 +2,11 @@ import { query, get, run } from '../db/database.js';
 import { seedDatabase } from '../db/seeds.js';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
+import express from 'express';
+import adminRoutes from '../routes/adminRoutes.js';
+import { authenticateToken, generateToken } from '../middleware/auth.js';
 import { getShippingProvider } from '../services/shippingService.js';
+
 
 const runTests = async () => {
   console.log('====================================================');
@@ -221,6 +225,8 @@ const runTests = async () => {
     const recentErrors = await get("SELECT COUNT(id) as count FROM error_logs WHERE severity IN ('ERROR', 'CRITICAL') AND timestamp >= NOW() - INTERVAL '15 minutes'");
     assert(recentErrors.count >= 3, 'Error Spike Detector flags 3+ critical errors in 15-minute window');
 
+
+
     // 17. Webhook Inspector & Callback Retry Test
     const whTestId = `evt_wh_retry_${Date.now()}`;
     const whRes = await run(
@@ -270,6 +276,63 @@ const runTests = async () => {
     await run("UPDATE orders SET status = 'CANCELLED', payment_status = 'EXPIRED' WHERE id = ?", [timeoutOrderRes.lastID]);
     const releasedOrder = await get("SELECT status, payment_status FROM orders WHERE id = ?", [timeoutOrderRes.lastID]);
     assert(releasedOrder.status === 'CANCELLED' && releasedOrder.payment_status === 'EXPIRED', 'Payment timeout inventory release worker releases reserved stock and cancels expired pending orders');
+
+    // 21. Price Normalization & Sync Regression Test (Admin Update Route Seam)
+    const priceTestProd = await get("SELECT * FROM products LIMIT 1");
+    const origVariants = await query("SELECT id, mrp, selling_price FROM product_variants WHERE product_id = $1", [priceTestProd.id]);
+
+    const adminToken = generateToken({ id: superAdmin.id, email: superAdmin.email, role: 'SUPER_ADMIN' });
+    const app = express();
+    app.use(express.json());
+    app.use(authenticateToken);
+    app.use('/api/admin', adminRoutes);
+
+    const server = app.listen(0);
+    const testPort = server.address().port;
+
+    const updateRes = await fetch(`http://localhost:${testPort}/api/admin/products/${priceTestProd.id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`,
+      },
+      body: JSON.stringify({
+        mrp: '',
+        selling_price: '649',
+      }),
+    });
+    const updateData = await updateRes.json();
+    server.close();
+
+    const checkUpdatedProd = await get("SELECT mrp, selling_price FROM products WHERE id = $1", [priceTestProd.id]);
+    const checkUpdatedVars = await query("SELECT id, mrp, selling_price FROM product_variants WHERE product_id = $1", [priceTestProd.id]);
+
+    // Separate MRP nullness check before numeric comparison so NULL remains distinct from 0
+    const assertMrpEqual = (actualMrp, expectedMrp) => {
+      if (expectedMrp === null || expectedMrp === undefined) {
+        return actualMrp === null;
+      }
+      return actualMrp !== null && Number(actualMrp) === Number(expectedMrp);
+    };
+
+    const prodMrpOk = assertMrpEqual(checkUpdatedProd.mrp, priceTestProd.mrp);
+    const prodPriceOk = Number(checkUpdatedProd.selling_price) === 649;
+
+    const varsOk = checkUpdatedVars.length > 0 && checkUpdatedVars.every(v => {
+      const origV = origVariants.find(o => o.id === v.id);
+      return (
+        Number(v.selling_price) === 649 &&
+        assertMrpEqual(v.mrp, origV ? origV.mrp : null)
+      );
+    });
+
+    assert(
+      updateData.success === true && prodMrpOk && prodPriceOk && varsOk,
+      'Price normalization converts empty strings to null and updates products & variants via admin update route'
+    );
+
+
+
 
   } catch (err) {
     console.error('Test Execution Error:', err);

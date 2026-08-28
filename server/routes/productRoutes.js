@@ -176,12 +176,17 @@ router.get('/:slug', async (req, res, next) => {
 
     const images = await query('SELECT * FROM product_images WHERE product_id = $1 ORDER BY display_order ASC', [product.id]);
     const variants = await query(
-      `SELECT v.*, i.available_stock, i.reserved_stock
+      `SELECT v.id, v.product_id, v.sku, v.attribute_name, v.attribute_value,
+              COALESCE(v.mrp, p.mrp) as mrp,
+              COALESCE(v.selling_price, p.selling_price) as selling_price,
+              v.weight_g, i.available_stock, i.reserved_stock
        FROM product_variants v
+       JOIN products p ON v.product_id = p.id
        LEFT JOIN inventory i ON v.id = i.variant_id
        WHERE v.product_id = $1`,
       [product.id]
     );
+
 
     const reviews = await query(
       `SELECT * FROM reviews WHERE product_id = $1 AND status = 'APPROVED' ORDER BY created_at DESC`,

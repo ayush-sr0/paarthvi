@@ -6,6 +6,8 @@ import { ToastProvider } from './context/ToastContext';
 import { Header } from './components/layout/Header';
 import { Footer } from './components/layout/Footer';
 import { CartDrawer } from './components/cart/CartDrawer';
+import { ScrollToTop } from './components/common/ScrollToTop';
+
 
 import { HomePage } from './pages/HomePage';
 import { ShopPage } from './pages/ShopPage';
@@ -24,7 +26,9 @@ export function App() {
       <CartProvider>
         <ToastProvider>
           <Router>
+            <ScrollToTop />
             <div className="flex flex-col min-h-screen mandala-bg">
+
               <Header />
               <main className="flex-grow">
                 <Routes>
