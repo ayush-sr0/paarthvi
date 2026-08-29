@@ -153,6 +153,15 @@ export const Footer = () => {
               </div>
             )}
 
+            {activeModal === 'terms' && (
+              <div>
+                <h3 className="font-display text-xl font-bold text-primary mb-3">Terms of Service</h3>
+                <p className="text-xs leading-relaxed text-on-surface-variant">
+                  By accessing and placing an order with Parthvi Ayurveda, you agree to be bound by our terms and conditions. All products, pricing, and promotions are subject to availability and change without prior notice. User accounts must contain accurate registration details. Usage of our platforms for unauthorized commercial purposes or scraping is strictly prohibited.
+                </p>
+              </div>
+            )}
+
             {activeModal === 'shipping' && (
               <div>
                 <h3 className="font-display text-xl font-bold text-primary mb-3">Shipping & Delivery Policy</h3>
