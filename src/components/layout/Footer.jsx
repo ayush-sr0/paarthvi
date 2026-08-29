@@ -20,7 +20,7 @@ export const Footer = () => {
   return (
     <footer className="bg-primary text-on-primary pt-16 pb-12 border-t border-gold-leaf/20 relative overflow-hidden">
       <div className="max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop">
-        
+
         {/* Top Newsletter Grid */}
         <div className="bg-primary-container/40 rounded-xl p-8 mb-12 border border-gold-leaf/30 flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="max-w-md">
@@ -56,7 +56,7 @@ export const Footer = () => {
 
         {/* Footer Navigation Columns */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-10 mb-12 border-b border-white/10 pb-12">
-          
+
           {/* Brand Philosophy Column */}
           <div className="space-y-4">
             <div className="mb-2">
@@ -143,7 +143,7 @@ export const Footer = () => {
           <div className="bg-surface text-on-surface rounded-xl max-w-2xl w-full p-6 max-h-[80vh] overflow-y-auto shadow-2xl relative border border-gold-leaf my-auto">
 
             <button onClick={() => setActiveModal(null)} className="absolute top-4 right-4 font-bold text-lg">✕</button>
-            
+
             {activeModal === 'privacy' && (
               <div>
                 <h3 className="font-display text-xl font-bold text-primary mb-3">Privacy & Data Policy</h3>

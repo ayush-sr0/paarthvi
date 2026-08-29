@@ -8,6 +8,7 @@
     "dev": "nodemon --ext js server/server.js & vite",
     "build": "vite build",
     "preview": "vite preview",
+    "start": "node server/server.js",
     "server": "node server/server.js",
     "server:dev": "nodemon --ext js server/server.js",
     "seed": "node server/db/seeds.js",

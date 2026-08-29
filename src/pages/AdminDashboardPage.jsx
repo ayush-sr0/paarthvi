@@ -6,8 +6,8 @@ import { Shield, Package, ShoppingBag, Layers, RefreshCw, Star, AlertTriangle, A
 
 export const AdminDashboardPage = () => {
   const { user, login } = useAuth();
-  const [adminEmailInput, setAdminEmailInput] = useState('admin@parthvi.com');
-  const [adminPasswordInput, setAdminPasswordInput] = useState('adminpassword123');
+  const [adminEmailInput, setAdminEmailInput] = useState('');
+  const [adminPasswordInput, setAdminPasswordInput] = useState('');
   const [adminLoginLoading, setAdminLoginLoading] = useState(false);
   const [adminLoginError, setAdminLoginError] = useState(null);
 
@@ -21,13 +21,6 @@ export const AdminDashboardPage = () => {
       setAdminLoginError(res.error || 'Invalid admin credentials');
     }
   };
-
-  // Auto-login as Admin when navigating to /admin
-  useEffect(() => {
-    if (!user || user.role === 'CUSTOMER') {
-      login('admin@parthvi.com', 'adminpassword123');
-    }
-  }, [user]);
 
 
   const [activeTab, setActiveTab] = useState('overview');
@@ -257,19 +250,6 @@ export const AdminDashboardPage = () => {
               {adminLoginLoading ? 'Signing In...' : 'Sign In to Admin Portal'}
             </button>
           </form>
-
-          <div className="border-t border-outline/10 pt-4">
-            <button
-              type="button"
-              onClick={() => handleAdminSignIn(null)}
-              className="w-full bg-gold-leaf text-primary font-label text-xs font-bold uppercase py-3 rounded-full hover:opacity-90 transition-opacity flex items-center justify-center gap-2 shadow-sm"
-            >
-              ⚡ 1-Click Quick Admin Access
-            </button>
-            <span className="text-[11px] text-on-surface-variant block mt-2">
-              Default Demo Account: admin@parthvi.com
-            </span>
-          </div>
         </div>
       </div>
     );

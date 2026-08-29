@@ -402,7 +402,7 @@ export const api = {
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ event_name: eventName, session_id: sessionId, page, metadata }),
       });
-    } catch (e) {}
+    } catch (e) { }
   },
 
   // Wishlist APIs

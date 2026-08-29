@@ -40,15 +40,15 @@ export const seedDatabase = async () => {
   console.log('Seeding Paarthvi Ayurveda authentic products...');
 
   let superAdminId, demoCustomerId;
-  const existingAdmin = await get("SELECT * FROM users WHERE email = 'admin@parthvi.com'");
+  const existingAdmin = await get("SELECT * FROM users WHERE email = 'admin@paarthvi.com'");
   if (!existingAdmin) {
-    const adminPass = await bcrypt.hash('adminpassword123', 10);
-    const orderPass = await bcrypt.hash('orderpassword123', 10);
+    const adminPass = await bcrypt.hash(process.env.ADMIN_PASSWORD || 'P@4rthvi#Adm1n2026!', 12);
+    const orderPass = await bcrypt.hash(process.env.ORDER_MANAGER_PASSWORD || 'OrderMgr#2026!', 12);
     const customerPass = await bcrypt.hash('customer123', 10);
 
     const superAdmin = await run(
       "INSERT INTO users (name, email, password_hash, phone, role) VALUES ($1, $2, $3, $4, $5) RETURNING id",
-      ['Super Admin', 'admin@parthvi.com', adminPass, '+91 9876543210', 'SUPER_ADMIN']
+      ['Super Admin', 'admin@paarthvi.com', adminPass, '+91 9876543210', 'SUPER_ADMIN']
     );
     superAdminId = superAdmin.lastID;
 
