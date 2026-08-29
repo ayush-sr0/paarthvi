@@ -106,6 +106,26 @@ export const api = {
     }
   },
 
+  async getComboProducts() {
+    try {
+      const res = await fetch(`${API_BASE}/products?is_combo=1`);
+      if (!res.ok) return { success: false, products: [] };
+      return await res.json();
+    } catch (err) {
+      return { success: false, products: [] };
+    }
+  },
+
+  async getPopularProducts() {
+    try {
+      const res = await fetch(`${API_BASE}/products?is_popular=1`);
+      if (!res.ok) return { success: false, products: [] };
+      return await res.json();
+    } catch (err) {
+      return { success: false, products: [] };
+    }
+  },
+
   async getProductBySlug(slug) {
     try {
       const res = await fetch(`${API_BASE}/products/${slug}`);

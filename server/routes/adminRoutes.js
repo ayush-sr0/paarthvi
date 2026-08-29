@@ -172,14 +172,14 @@ router.get('/products', requireRole(['PRODUCT_MANAGER']), async (req, res, next)
 
 router.post('/products', requireRole(['PRODUCT_MANAGER']), async (req, res, next) => {
   try {
-    const { name, slug, category_id, brand, short_desc, description, mrp, selling_price, is_featured, is_bestseller, target_dosha, ingredients, key_ingredients, benefits, usage_directions, warnings, storage_info, net_qty, manufacturer_info, image_url } = req.body;
+    const { name, slug, category_id, brand, short_desc, description, mrp, selling_price, is_featured, is_bestseller, is_combo, is_popular, target_dosha, ingredients, key_ingredients, benefits, usage_directions, warnings, storage_info, net_qty, manufacturer_info, image_url } = req.body;
 
     const resProd = await run(
       `INSERT INTO products (
         name, slug, category_id, brand, short_desc, description, mrp, selling_price,
-        is_featured, is_bestseller, target_dosha, status, ingredients, key_ingredients, benefits, usage_directions, warnings, storage_info, net_qty, manufacturer_info
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20) RETURNING id`,
-      [name, slug, category_id, brand || 'Parthvi Ayurveda', short_desc, description, mrp, selling_price, Boolean(is_featured), Boolean(is_bestseller), target_dosha || 'TRIDOSAHIC', 'PUBLISHED', ingredients, key_ingredients, benefits, usage_directions, warnings, storage_info, net_qty, manufacturer_info]
+        is_featured, is_bestseller, is_combo, is_popular, target_dosha, status, ingredients, key_ingredients, benefits, usage_directions, warnings, storage_info, net_qty, manufacturer_info
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22) RETURNING id`,
+      [name, slug, category_id, brand || 'Parthvi Ayurveda', short_desc, description, mrp, selling_price, Boolean(is_featured), Boolean(is_bestseller), Boolean(is_combo), Boolean(is_popular), target_dosha || 'TRIDOSAHIC', 'PUBLISHED', ingredients, key_ingredients, benefits, usage_directions, warnings, storage_info, net_qty, manufacturer_info]
     );
 
     const productId = resProd.lastID;
@@ -212,7 +212,7 @@ router.put('/products/:id', requireRole(['PRODUCT_MANAGER']), async (req, res, n
 
     const {
       name, slug, category_id, brand, short_desc, description, mrp, selling_price,
-      is_featured, is_bestseller, is_new, target_dosha, status,
+      is_featured, is_bestseller, is_new, is_combo, is_popular, target_dosha, status,
       ingredients, key_ingredients, benefits, usage_directions,
       warnings, storage_info, net_qty, manufacturer_info,
     } = req.body;
@@ -220,39 +220,53 @@ router.put('/products/:id', requireRole(['PRODUCT_MANAGER']), async (req, res, n
     const parsedMrp = (mrp !== undefined && mrp !== null && mrp !== '') ? Number(mrp) : null;
     const parsedSellingPrice = (selling_price !== undefined && selling_price !== null && selling_price !== '') ? Number(selling_price) : null;
 
-    await run(
-      `UPDATE products SET
-        name = COALESCE($1, name), slug = COALESCE($2, slug), category_id = COALESCE($3, category_id),
-        brand = COALESCE($4, brand), short_desc = COALESCE($5, short_desc), description = COALESCE($6, description),
-        mrp = COALESCE($7, mrp), selling_price = COALESCE($8, selling_price),
-        is_featured = COALESCE($9, is_featured), is_bestseller = COALESCE($10, is_bestseller),
-        is_new = COALESCE($11, is_new), target_dosha = COALESCE($12, target_dosha), status = COALESCE($13, status),
-        ingredients = COALESCE($14, ingredients), key_ingredients = COALESCE($15, key_ingredients),
-        benefits = COALESCE($16, benefits), usage_directions = COALESCE($17, usage_directions),
-        warnings = COALESCE($18, warnings), storage_info = COALESCE($19, storage_info),
-        net_qty = COALESCE($20, net_qty), manufacturer_info = COALESCE($21, manufacturer_info),
-        updated_at = NOW()
-       WHERE id = $22`,
-      [
-        name, slug, category_id, brand, short_desc, description, parsedMrp, parsedSellingPrice,
-        is_featured != null ? Boolean(is_featured) : null,
-        is_bestseller != null ? Boolean(is_bestseller) : null,
-        is_new != null ? Boolean(is_new) : null,
-        target_dosha, status, ingredients, key_ingredients, benefits, usage_directions,
-        warnings, storage_info, net_qty, manufacturer_info,
-        productId,
-      ]
-    );
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
 
-    if (parsedMrp !== null || parsedSellingPrice !== null) {
-      await run(
-        `UPDATE product_variants
-         SET mrp = COALESCE($1, mrp), selling_price = COALESCE($2, selling_price)
-         WHERE product_id = $3`,
-        [parsedMrp, parsedSellingPrice, productId]
+      await client.query(
+        `UPDATE products SET
+          name = COALESCE($1, name), slug = COALESCE($2, slug), category_id = COALESCE($3, category_id),
+          brand = COALESCE($4, brand), short_desc = COALESCE($5, short_desc), description = COALESCE($6, description),
+          mrp = COALESCE($7, mrp), selling_price = COALESCE($8, selling_price),
+          is_featured = COALESCE($9, is_featured), is_bestseller = COALESCE($10, is_bestseller),
+          is_new = COALESCE($11, is_new), target_dosha = COALESCE($12, target_dosha), status = COALESCE($13, status),
+          ingredients = COALESCE($14, ingredients), key_ingredients = COALESCE($15, key_ingredients),
+          benefits = COALESCE($16, benefits), usage_directions = COALESCE($17, usage_directions),
+          warnings = COALESCE($18, warnings), storage_info = COALESCE($19, storage_info),
+          net_qty = COALESCE($20, net_qty), manufacturer_info = COALESCE($21, manufacturer_info),
+          is_combo = COALESCE($23, is_combo), is_popular = COALESCE($24, is_popular),
+          updated_at = NOW()
+         WHERE id = $22`,
+        [
+          name, slug, category_id, brand, short_desc, description, parsedMrp, parsedSellingPrice,
+          is_featured != null ? Boolean(is_featured) : null,
+          is_bestseller != null ? Boolean(is_bestseller) : null,
+          is_new != null ? Boolean(is_new) : null,
+          target_dosha, status, ingredients, key_ingredients, benefits, usage_directions,
+          warnings, storage_info, net_qty, manufacturer_info,
+          productId,
+          is_combo != null ? Boolean(is_combo) : null,
+          is_popular != null ? Boolean(is_popular) : null,
+        ]
       );
-    }
 
+      if (parsedMrp !== null || parsedSellingPrice !== null) {
+        await client.query(
+          `UPDATE product_variants
+           SET mrp = COALESCE($1, mrp), selling_price = COALESCE($2, selling_price)
+           WHERE product_id = $3`,
+          [parsedMrp, parsedSellingPrice, productId]
+        );
+      }
+
+      await client.query('COMMIT');
+    } catch (txErr) {
+      await client.query('ROLLBACK');
+      throw txErr;
+    } finally {
+      client.release();
+    }
 
     await logAuditAction(req, 'UPDATE_PRODUCT', 'PRODUCT', productId, prev, req.body);
     res.json({ success: true, message: 'Product updated successfully' });

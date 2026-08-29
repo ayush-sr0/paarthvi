@@ -135,9 +135,9 @@ export const ProductDetailPage = () => {
               alt={product.name}
               className="w-full h-full object-cover"
             />
-            {currentMrp > currentPrice && (
+            {Number(currentMrp) > Number(currentPrice) && (
               <span className="absolute top-4 left-4 bg-primary text-on-primary font-label text-xs font-bold uppercase px-3 py-1 rounded shadow-md">
-                {Math.round(((currentMrp - currentPrice) / currentMrp) * 100)}% OFF
+                {Math.round(((Number(currentMrp) - Number(currentPrice)) / Number(currentMrp)) * 100)}% OFF
               </span>
             )}
           </div>

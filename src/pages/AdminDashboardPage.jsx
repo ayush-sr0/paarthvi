@@ -60,6 +60,7 @@ export const AdminDashboardPage = () => {
     display_order: 0,
     active: 1,
   });
+  const [bannerImageUploading, setBannerImageUploading] = useState(false);
 
   // CMS Blog Posts State
   const [blogList, setBlogList] = useState([]);
@@ -369,6 +370,8 @@ export const AdminDashboardPage = () => {
       is_featured: editProd.is_featured ? 1 : 0,
       is_bestseller: editProd.is_bestseller ? 1 : 0,
       is_new: editProd.is_new ? 1 : 0,
+      is_combo: editProd.is_combo ? 1 : 0,
+      is_popular: editProd.is_popular ? 1 : 0,
       target_dosha: editProd.target_dosha || 'TRIDOSAHIC',
       status: editProd.status,
 
@@ -444,6 +447,14 @@ export const AdminDashboardPage = () => {
   // Banner Handlers
   const handleSaveBanner = async (e) => {
     e.preventDefault();
+    if (!bannerForm.desktop_image.trim()) {
+      alert('Please upload or enter a banner image before saving.');
+      return;
+    }
+    if (bannerImageUploading) {
+      alert('Please wait for the image upload to finish.');
+      return;
+    }
     if (bannerForm.id) {
       await api.updateBanner(bannerForm.id, bannerForm);
     } else {
@@ -1020,6 +1031,14 @@ export const AdminDashboardPage = () => {
                       <input type="checkbox" checked={!!newProd.is_bestseller} onChange={e => setNewProd(p => ({ ...p, is_bestseller: e.target.checked ? 1 : 0 }))} className="accent-gold-leaf w-4 h-4" />
                       <span className="font-semibold text-on-surface">Best Seller</span>
                     </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={!!newProd.is_combo} onChange={e => setNewProd(p => ({ ...p, is_combo: e.target.checked ? 1 : 0 }))} className="accent-gold-leaf w-4 h-4" />
+                      <span className="font-semibold text-on-surface">Combo Section</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={!!newProd.is_popular} onChange={e => setNewProd(p => ({ ...p, is_popular: e.target.checked ? 1 : 0 }))} className="accent-gold-leaf w-4 h-4" />
+                      <span className="font-semibold text-on-surface">Popular Section</span>
+                    </label>
                   </div>
 
                   {/* Detailed Description Fields */}
@@ -1166,7 +1185,7 @@ export const AdminDashboardPage = () => {
 
                   {/* Flags */}
                   <div className="flex flex-wrap gap-4">
-                    {[['is_featured', 'Featured'], ['is_bestseller', 'Best Seller'], ['is_new', 'New Arrival']].map(([field, label]) => (
+                    {[['is_featured', 'Featured'], ['is_bestseller', 'Best Seller'], ['is_new', 'New Arrival'], ['is_combo', 'Combo Section'], ['is_popular', 'Popular Section']].map(([field, label]) => (
                       <label key={field} className="flex items-center gap-2 cursor-pointer">
                         <input type="checkbox" checked={!!editProd[field]} onChange={e => setEditProd(p => ({ ...p, [field]: e.target.checked ? 1 : 0 }))} className="accent-gold-leaf w-4 h-4" />
                         <span className="font-semibold text-on-surface">{label}</span>
@@ -1347,6 +1366,7 @@ export const AdminDashboardPage = () => {
             <button
               onClick={() => {
                 setBannerForm({ id: null, title: '', subtitle: '', cta_text: 'Shop Now', cta_url: '/shop', desktop_image: '', mobile_image: '', display_order: 0, active: 1 });
+                setBannerImageUploading(false);
                 setShowBannerModal(true);
               }}
               className="bg-primary text-on-primary font-label text-xs font-bold uppercase px-4 py-2 rounded-full inline-flex items-center gap-1"
@@ -1382,8 +1402,53 @@ export const AdminDashboardPage = () => {
                     </div>
                   </div>
                   <div>
-                    <label className="block font-semibold mb-1">Desktop Image URL</label>
-                    <input type="url" value={bannerForm.desktop_image} onChange={e => setBannerForm(p => ({ ...p, desktop_image: e.target.value }))} placeholder="https://..." className="w-full px-3 py-2 bg-surface-container border border-outline/30 rounded-lg" required />
+                    <label className="block font-semibold mb-1">Hero Banner Image *</label>
+                    {/* Upload from device */}
+                    <label className="flex flex-col items-center justify-center gap-2 w-full h-28 border-2 border-dashed border-outline/40 rounded-xl bg-surface-container cursor-pointer hover:border-gold-leaf transition-colors group">
+                      {bannerImageUploading ? (
+                        <span className="text-xs text-on-surface-variant animate-pulse">Uploading…</span>
+                      ) : bannerForm.desktop_image ? (
+                        <>
+                          <img src={bannerForm.desktop_image} alt="Banner preview" className="h-20 w-full object-cover rounded-lg" />
+                          <span className="text-[10px] text-on-surface-variant">Click to replace image</span>
+                        </>
+                      ) : (
+                        <>
+                          <ImageIcon size={24} className="text-outline group-hover:text-gold-leaf transition-colors" />
+                          <span className="text-xs text-on-surface-variant">Click to upload banner image</span>
+                          <span className="text-[10px] text-outline">JPG, PNG, WebP — recommended 1920×600px</span>
+                        </>
+                      )}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={async e => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          setBannerImageUploading(true);
+                          const reader = new FileReader();
+                          reader.onloadend = async () => {
+                            const res = await api.uploadImage(reader.result, file.name);
+                            setBannerImageUploading(false);
+                            if (res.success && res.url) {
+                              setBannerForm(p => ({ ...p, desktop_image: res.url }));
+                            } else {
+                              alert(`Image upload failed: ${res.error || 'Unknown error'}`);
+                            }
+                          };
+                          reader.readAsDataURL(file);
+                        }}
+                      />
+                    </label>
+                    {/* URL fallback */}
+                    <input
+                      type="text"
+                      value={bannerForm.desktop_image}
+                      onChange={e => setBannerForm(p => ({ ...p, desktop_image: e.target.value }))}
+                      placeholder="Or paste image URL directly…"
+                      className="mt-2 w-full px-3 py-2 bg-surface-container border border-outline/30 rounded-lg text-[11px]"
+                    />
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
@@ -1398,8 +1463,12 @@ export const AdminDashboardPage = () => {
                       </select>
                     </div>
                   </div>
-                  <button type="submit" className="w-full bg-primary text-on-primary font-label text-xs font-bold uppercase py-3 rounded-full hover:bg-primary-container">
-                    Save Banner
+                  <button
+                    type="submit"
+                    disabled={bannerImageUploading || !bannerForm.desktop_image.trim()}
+                    className="w-full bg-primary text-on-primary font-label text-xs font-bold uppercase py-3 rounded-full hover:bg-primary-container disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                  >
+                    {bannerImageUploading ? 'Uploading image…' : 'Save Banner'}
                   </button>
                 </form>
               </div>
@@ -1424,7 +1493,7 @@ export const AdminDashboardPage = () => {
                       <button onClick={() => handleToggleBannerActive(b)} className="border border-outline/30 px-2 py-1 rounded text-[10px] font-label font-bold uppercase">
                         {b.active === 1 ? 'Disable' : 'Enable'}
                       </button>
-                      <button onClick={() => { setBannerForm(b); setShowBannerModal(true); }} className="p-1 text-primary hover:bg-primary/10 rounded">
+                      <button onClick={() => { setBannerForm(b); setBannerImageUploading(false); setShowBannerModal(true); }} className="p-1 text-primary hover:bg-primary/10 rounded">
                         <Edit size={14} />
                       </button>
                       <button onClick={() => handleDeleteBanner(b.id)} className="p-1 text-error hover:bg-error-container/20 rounded">

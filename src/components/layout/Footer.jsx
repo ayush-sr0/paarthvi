@@ -60,7 +60,7 @@ export const Footer = () => {
           {/* Brand Philosophy Column */}
           <div className="space-y-4">
             <div className="mb-2">
-              <Logo size="md" />
+              <Logo size="md" variant="light" />
             </div>
 
             <p className="text-xs leading-relaxed opacity-80 font-body">

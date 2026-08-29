@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import { useCart } from '../context/CartContext';
 import { SEO } from '../components/SEO';
-import { ArrowRight, Star, Heart, ShoppingBag, CheckCircle, ChevronLeft, ChevronRight, Play, Sparkles, Leaf, Mountain, ShieldCheck, HeartHandshake } from 'lucide-react';
+import { ArrowRight, Star, Heart, ShoppingBag, CheckCircle, ChevronLeft, ChevronRight, Sparkles, Leaf, Mountain, ShieldCheck, HeartHandshake } from 'lucide-react';
 
 export const HomePage = () => {
   const navigate = useNavigate();
@@ -12,8 +12,8 @@ export const HomePage = () => {
   const [categories, setCategories] = useState([]);
   const [bestSellers, setBestSellers] = useState([]);
   const [comboProducts, setComboProducts] = useState([]);
+  const [popularProducts, setPopularProducts] = useState([]);
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
-  const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
   const comboScrollRef = React.useRef(null);
 
   const defaultCategoryCards = [
@@ -172,10 +172,24 @@ export const HomePage = () => {
       if (data.success) setBestSellers(data.products || []);
     });
 
-    api.getProducts().then(data => {
+    // Fetch combo-tagged products from DB; fallback to full product list if none tagged yet
+    api.getComboProducts().then(data => {
       if (data.success && data.products && data.products.length > 0) {
         setComboProducts(data.products);
+      } else {
+        api.getProducts().then(fallback => {
+          if (fallback.success && fallback.products && fallback.products.length > 0) {
+            setComboProducts(fallback.products);
+          } else {
+            setComboProducts(defaultComboProducts);
+          }
+        });
       }
+    });
+
+    // Fetch popular-tagged products from DB
+    api.getPopularProducts().then(data => {
+      if (data.success && data.products) setPopularProducts(data.products || []);
     });
 
     api.trackEvent('PAGE_VIEW', '/');
@@ -424,13 +438,16 @@ export const HomePage = () => {
             <h2 className="font-display text-2xl text-on-background font-bold">Popular Now</h2>
             <p className="font-body text-xs text-on-surface-variant mt-1">Our most sought-after remedies.</p>
           </div>
-          <Link to="/shop?sort=bestseller" className="hidden md:flex items-center gap-1 text-primary hover:text-secondary font-label text-xs uppercase font-bold transition-colors">
+          <Link
+            to={popularProducts.length > 0 ? '/shop?is_popular=1' : '/shop?sort=bestseller'}
+            className="hidden md:flex items-center gap-1 text-primary hover:text-secondary font-label text-xs uppercase font-bold transition-colors"
+          >
             View All <ArrowRight size={14} />
           </Link>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {bestSellers.slice(0, 4).map((product) => (
+          {(popularProducts.length > 0 ? popularProducts : bestSellers).slice(0, 4).map((product) => (
             <div
               key={product.id}
               onClick={() => navigate(`/product/${product.slug}`)}
@@ -514,31 +531,6 @@ export const HomePage = () => {
         </div>
       </section>
 
-      {/* Sacred Motion Video Section (Reference code.html) */}
-      <section className="px-margin-mobile md:px-margin-desktop my-8">
-        <div
-          onClick={() => setIsVideoModalOpen(true)}
-          className="relative w-full h-[50vh] min-h-[300px] rounded-xl overflow-hidden shadow-md group cursor-pointer border border-outline/20"
-        >
-          <div
-            className="absolute inset-0 bg-cover bg-center transition-transform duration-1000 group-hover:scale-105"
-            style={{
-              backgroundImage: `url('/products/chyawanprash.jpg')`,
-            }}
-          ></div>
-          <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center p-6 text-center group-hover:bg-black/50 transition-colors">
-            <div className="w-20 h-20 rounded-full bg-surface/90 text-primary flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(255,255,255,0.3)] group-hover:scale-110 transition-transform">
-              <Play size={32} className="ml-1" />
-            </div>
-            <h2 className="font-display text-3xl md:text-4xl text-white mb-2 font-bold tracking-wide">
-              The Journey of a Herb
-            </h2>
-            <p className="font-body text-sm text-white/90 max-w-lg">
-              Experience the mindful harvesting and sacred Kshirpak preparation behind our remedies.
-            </p>
-          </div>
-        </div>
-      </section>
 
       {/* Wellness Wisdom Highlights */}
       <section className="px-margin-mobile md:px-margin-desktop bg-surface-container-low py-12 border-y border-outline/10">
@@ -654,27 +646,6 @@ export const HomePage = () => {
           At Parthvi Ayurveda, our mission is to bring the timeless science of life into the rhythm of the modern world. We believe that true wellness is not merely the absence of illness, but a vibrant state of balance between body, mind, and consciousness. Sourced directly from ethical farmers in the Himalayan foothills and prepared following strict classical guidelines, our remedies offer a sanctuary of purity in a chaotic world. Reconnect with your true nature.
         </p>
       </section>
-
-      {/* Video Modal Overlay */}
-      {isVideoModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-start justify-center p-4 overflow-y-auto py-8 md:py-12">
-          <div className="bg-surface rounded-2xl max-w-3xl w-full p-6 relative border border-gold-leaf shadow-2xl my-auto">
-
-            <button
-              onClick={() => setIsVideoModalOpen(false)}
-              className="absolute top-4 right-4 text-on-surface font-bold text-lg"
-            >
-              ✕
-            </button>
-            <h3 className="font-display text-xl font-bold text-primary mb-4">The Journey of a Herb</h3>
-            <div className="w-full h-80 bg-black rounded-xl overflow-hidden flex items-center justify-center text-white text-xs font-body">
-              <p className="p-4 text-center">
-                [Herbal Preparation Video: Showing wild Amla harvesting, Kshirpak Kshira boiling, and traditional copper pot decoction]
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
 
     </div>
   );

@@ -35,7 +35,7 @@ router.get('/categories', async (req, res, next) => {
 // GET products (PLP with filtering & sorting)
 router.get('/', async (req, res, next) => {
   try {
-    const { category, min_price, max_price, rating, is_featured, is_bestseller, dosha, sort, search } = req.query;
+    const { category, min_price, max_price, rating, is_featured, is_bestseller, is_combo, is_popular, dosha, sort, search } = req.query;
 
     let sql = `
       SELECT p.*, c.name as category_name, c.slug as category_slug,
@@ -80,6 +80,14 @@ router.get('/', async (req, res, next) => {
 
     if (is_bestseller === '1') {
       sql += ` AND p.is_bestseller = TRUE`;
+    }
+
+    if (is_combo === '1') {
+      sql += ` AND p.is_combo = TRUE`;
+    }
+
+    if (is_popular === '1') {
+      sql += ` AND p.is_popular = TRUE`;
     }
 
     if (search) {

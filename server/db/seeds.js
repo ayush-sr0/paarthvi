@@ -7,6 +7,8 @@ export const seedDatabase = async () => {
   // Each statement runs independently so one failure doesn't block later migrations.
   const migrations = [
     "ALTER TABLE products ADD COLUMN IF NOT EXISTS target_dosha VARCHAR(100) DEFAULT 'TRIDOSAHIC'",
+    "ALTER TABLE products ADD COLUMN IF NOT EXISTS is_combo BOOLEAN DEFAULT FALSE",
+    "ALTER TABLE products ADD COLUMN IF NOT EXISTS is_popular BOOLEAN DEFAULT FALSE",
     "ALTER TABLE orders ADD COLUMN IF NOT EXISTS waybill VARCHAR(100)",
     "ALTER TABLE orders ADD COLUMN IF NOT EXISTS courier_name VARCHAR(100)",
     "ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_label_url TEXT",

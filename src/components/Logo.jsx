@@ -5,8 +5,12 @@ import { Link } from 'react-router-dom';
  * Logo Component
  * Renders linked logo images where the emblem image is decorative (alt="")
  * and the brand typography image provides the single accessible "Parthvi Ayurveda" brand name.
+ *
+ * Props:
+ *   size    — 'sm' | 'md' | 'lg' | 'xl'
+ *   variant — 'dark' (default, for light backgrounds) | 'light' (for dark backgrounds)
  */
-export const Logo = ({ className = '', size = 'md' }) => {
+export const Logo = ({ className = '', size = 'md', variant = 'dark' }) => {
   const heightClasses = {
     sm: 'h-8 md:h-9',
     md: 'h-10 md:h-12',
@@ -15,6 +19,11 @@ export const Logo = ({ className = '', size = 'md' }) => {
   };
 
   const currentHeight = heightClasses[size] || heightClasses.md;
+
+  // On dark backgrounds (footer), invert the dark-green logo to gold/cream
+  const wordmarkFilter = variant === 'light'
+    ? 'brightness(0) saturate(100%) invert(85%) sepia(30%) saturate(400%) hue-rotate(5deg) brightness(105%)'
+    : undefined;
 
   return (
     <Link
@@ -33,6 +42,7 @@ export const Logo = ({ className = '', size = 'md' }) => {
         src="/logo_text.png"
         alt="Parthvi Ayurveda"
         className={`${currentHeight} w-auto object-contain max-h-[85%] shrink-0 ml-1.5`}
+        style={wordmarkFilter ? { filter: wordmarkFilter } : undefined}
       />
     </Link>
   );
